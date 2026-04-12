@@ -1,13 +1,16 @@
 export default function Footer() {
   return (
-    <footer className="bg-[#0b0b0b] text-white py-20 relative overflow-hidden">
+    <footer
+      data-navbar-tone="light"
+      className="bg-[#0b0b0b] text-white py-20 relative overflow-hidden"
+    >
       
       <div className="max-w-[1500px] mx-auto px-6 md:px-20">
         
         {/* TOP QUOTE */}
         <div className="flex justify-end mb-16">
           <p className="text-[16px] md:text-[20px] text-white/70 max-w-[400px] text-right">
-            "Capturing Moments, Crafting Stories"
+            &ldquo;Capturing Moments, Crafting Stories&rdquo;
           </p>
         </div>
 

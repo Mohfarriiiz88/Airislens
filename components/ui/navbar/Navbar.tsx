@@ -48,12 +48,13 @@ export default function Navbar() {
   }, []);
 
   useEffect(() => {
+    const isDesktopViewport = window.matchMedia("(min-width: 768px)").matches;
     const themedSections = Array.from(
       document.querySelectorAll<HTMLElement>("[data-navbar-tone]")
     );
     let frameId = 0;
 
-    if (themedSections.length === 0) {
+    if (!isDesktopViewport || themedSections.length === 0) {
       frameId = window.requestAnimationFrame(() => {
         setDesktopTone("light");
       });

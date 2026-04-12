@@ -21,15 +21,15 @@ export default function FindFg() {
     >
       
       {/* ================= HEADER ================= */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-16">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-16 mt-10">
         
         {/* LEFT */}
-        <h1 className="text-4xl md:text-5xl font-medium leading-tight">
+        <h1 className="text-black text-[40px] md:text-[40px] font-medium leading-tight">
           Choise Your <br /> Fotographer
         </h1>
 
         {/* RIGHT */}
-        <p className="max-w-md text-black mt-6 md:mt-0 text-sm leading-relaxed">
+        <p className="max-w-md text-black mt-6 md:mt-0 text-[24px] leading-relaxed">
           We carefully select and recommend the best photographers to match
           your style, ensuring every moment you capture is nothing less than
           extraordinary.
