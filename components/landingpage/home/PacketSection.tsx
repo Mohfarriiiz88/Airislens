@@ -3,7 +3,7 @@ import PacketItem from "@/components/ui/PacketItem";
 
 export default function PacketSection() {
   return (
-    <section className="py-20 bg-white">
+    <section data-navbar-tone="dark" className="py-20 bg-white">
       
       <div className="max-w-[1500px] mx-auto px-6 md:px-20">
         

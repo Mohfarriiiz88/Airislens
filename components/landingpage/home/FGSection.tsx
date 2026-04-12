@@ -3,7 +3,7 @@ import Button from "@/components/ui/Button";
 
 export default function FGSection() {
   return (
-    <section className="py-20 bg-white">
+    <section data-navbar-tone="dark" className="py-20 bg-white">
       
       <div className="max-w-[1500px] mx-auto px-6 md:px-20">
         

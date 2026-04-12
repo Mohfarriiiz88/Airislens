@@ -1,8 +1,12 @@
 "use client";
 import SplitText from "@/components/ui/animation/SplitText";
+
 export default function Hero() {
   return (
-    <section className="relative h-screen w-full overflow-hidden bg-black">
+    <section
+      data-navbar-tone="light"
+      className="relative h-screen w-full overflow-hidden bg-black"
+    >
       {" "}
       {/* BACKGROUND */}{" "}
       <img

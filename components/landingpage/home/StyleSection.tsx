@@ -1,6 +1,6 @@
 export default function StyleSection() {
   return (
-    <section className="py-24 bg-white">
+    <section data-navbar-tone="dark" className="py-24 bg-white">
       
       <div className="max-w-[1500px] mx-auto px-6 md:px-20">
         

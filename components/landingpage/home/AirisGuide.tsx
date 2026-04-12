@@ -2,7 +2,7 @@ import Image from "next/image";
 
 export default function AirisGuide() {
   return (
-    <section className="relative w-full h-[530px]">
+    <section data-navbar-tone="light" className="relative w-full h-[530px]">
       
       {/* BACKGROUND */}
       <Image
