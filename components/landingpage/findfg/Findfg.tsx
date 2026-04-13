@@ -36,7 +36,6 @@ export default function FindFg() {
         </p>
       </div>
 
-      {/* ================= CATEGORY FILTER ================= */}
       <div className="flex gap-8 mb-10 text-gray-400 text-sm">
         {categories.map((cat) => (
           <button
