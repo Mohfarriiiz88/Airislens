@@ -123,21 +123,22 @@ export default function Navbar() {
       >
         <Link href="/" className="relative z-[10002] flex items-center">
           <Image
-            src="/svg/logo.svg"
-            alt="AirisLens Logo"
-            width={50}
-            height={10}
-            className={`object-contain transition duration-300 md:hidden ${mobileLogoClass}`}
-            priority
-          />
-          <Image
-            src="/svg/logo.svg"
-            alt="AirisLens Logo"
-            width={50}
-            height={10}
-            className={`hidden object-contain transition duration-300 md:block ${desktopLogoClass}`}
-            priority
-          />
+  src="/svg/logo.svg"
+  alt="AirisLens Logo"
+  width={50}
+  height={50}
+  className={`h-6 w-auto object-contain transition duration-300 md:hidden ${mobileLogoClass}`}
+  priority
+/>
+
+<Image
+  src="/svg/logo.svg"
+  alt="AirisLens Logo"
+  width={50}
+  height={50}
+  className={`hidden h-6 w-auto object-contain transition duration-300 md:block ${desktopLogoClass}`}
+  priority
+/>
         </Link>
 
         <nav className="hidden items-center gap-10 text-[20px] font-normal md:flex">

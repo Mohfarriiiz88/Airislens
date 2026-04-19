@@ -11,7 +11,7 @@ export default function Gallery() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-16 mt-10">
         
         {/* LEFT */}
-        <h1 className="text-[24px] md:text-[40px] font-medium leading-tight">
+        <h1 className="text-black text-[24px] md:text-[40px] font-medium leading-tight">
           Explore Our <br /> Gallery
         </h1>
 

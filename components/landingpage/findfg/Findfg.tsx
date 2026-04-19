@@ -36,7 +36,7 @@ export default function FindFg() {
         </p>
       </div>
 
-      <div className="flex gap-8 mb-10 text-gray-400 text-sm">
+      <div className="flex gap-8 mb-10 text-gray-400 text-[18px]">
         {categories.map((cat) => (
           <button
             key={cat}
