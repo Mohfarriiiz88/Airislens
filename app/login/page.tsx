@@ -20,7 +20,7 @@ export default function LoginPage() {
       <div className="w-1/2 hidden lg:block">
         <div className="relative w-full h-full">
           <Image
-            src="/images/izza.svg"
+            src="/svg/izza.svg"
             alt="hero"
             fill
             className="object-cover"

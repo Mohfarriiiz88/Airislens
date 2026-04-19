@@ -108,7 +108,17 @@ body::-webkit-scrollbar {
   width: 0;
   height: 0;
 }
+/* Text selection (highlight saat diblock) */
+::selection {
+  background: rgb(0, 0, 0);
+  color: white;
+}
 
+/* Untuk browser Firefox */
+::-moz-selection {
+  background: rgb(0, 0, 0);
+  color: white;
+}
 /* ============================= */
 /* ✅ OPTIONAL MOBILE STYLE */
 /* ============================= */
