@@ -104,10 +104,10 @@ export default function BookingForm() {
                     key={p.value}
                     onClick={() => update("package", p.value)}
                     className={`border p-4 rounded-md cursor-pointer transition ${
-                      active
-                        ? "border-black"
-                        : "border-gray-200 hover:border-black"
-                    }`}
+  active
+    ? "bg-black text-white border-black"
+    : "border-gray-200 hover:border-black"
+}`}
                   >
                     <p className="font-medium">{p.label}</p>
                     <p className="text-sm mt-1">{p.duration}</p>
