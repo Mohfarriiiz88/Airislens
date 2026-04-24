@@ -72,7 +72,7 @@ export default function BookingForm() {
       {/* ================= HEADER ================= */}
       <div className="mb-12 mt-10">
         <h1 className="text-[24px] md:text-[40px] font-normal leading-tight">
-         Form Booking
+          Form Booking
         </h1>
 
         <p className="mt-2 text-[18px] md:text-[20px] max-w-xl">
@@ -104,10 +104,10 @@ export default function BookingForm() {
                     key={p.value}
                     onClick={() => update("package", p.value)}
                     className={`border p-4 rounded-md cursor-pointer transition ${
-  active
-    ? "bg-black text-white border-black"
-    : "border-gray-200 hover:border-black"
-}`}
+                      active
+                        ? "bg-black text-white border-black"
+                        : "border-gray-200 hover:border-black"
+                    }`}
                   >
                     <p className="font-medium">{p.label}</p>
                     <p className="text-sm mt-1">{p.duration}</p>
