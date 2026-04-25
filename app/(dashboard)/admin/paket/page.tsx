@@ -89,47 +89,47 @@ export default function AdminPaketPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-white">Paket Foto</h1>
-          <p className="text-sm text-white/60">
+          <h1 className="text-[40px] font-normal text-black">Photo Package</h1>
+          <p className="text-lg font-normal text-black">
             Kelola paket layanan fotografi
           </p>
         </div>
 
         <button
           onClick={openCreate}
-          className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-black hover:opacity-90"
+          className="rounded-xl bg-white px-4 py-2 text-sm font-normal text-black hover:opacity-90"
         >
           + Tambah Paket
         </button>
-      </div>
+      </div>  
 
       {/* Table */}
-      <div className="rounded-2xl border border-white/10 bg-[#111111] overflow-hidden">
-        <table className="w-full text-sm text-white">
-          <thead className="bg-[#1A1A1A] text-white/70">
+      <div className="rounded-2xl border border-black/20 bg-[#ffffff] overflow-hidden">
+        <table className="w-full text-sm text-black">
+          <thead className="bg-[#ffffff] text-black">
             <tr>
-              <th className="px-6 py-4">Nama</th>
-              <th className="px-6 py-4">Durasi</th>
-              <th className="px-6 py-4">Harga</th>
-              <th className="px-6 py-4">Deskripsi</th>
-              <th className="px-6 py-4">Action</th>
+              <th className="text-left font-medium px-6 py-4">Nama</th>
+              <th className="font-medium px-6 py-4">Durasi</th>
+              <th className="font-medium px-6 py-4">Harga</th>
+              <th className="font-medium px-6 py-4">Deskripsi</th>
+              <th className="font-medium px-6 py-4">Action</th>
             </tr>
           </thead>
           <tbody>
             {pakets.map((p) => (
               <tr
                 key={p.id}
-                className="border-t border-white/5 hover:bg-white/5 transition"
+                className="border-t border-black/20 hover:bg-white/10 transition"
               >
-                <td className="px-6 py-4 font-medium">{p.name}</td>
-                <td className="px-6 py-4">{p.duration}</td>
-                <td className="px-6 py-4">
+                <td className="text-left px-6 py-4">{p.name}</td>
+                <td className="text-center px-6 py-4">{p.duration}</td>
+                <td className="text-center px-6 py-4">
                   Rp {p.price.toLocaleString('id-ID')}
                 </td>
-                <td className="px-6 py-4 text-white/70">
+                <td className="text-center px-6 py-4 text-black">
                   {p.description}
                 </td>
-               <td className="px-6 py-4">
+               <td className="text-center px-6 py-4">
   <button
     onClick={() => openEdit(p)}
     className="rounded-lg border border-white/10 px-3 py-1 text-xs hover:bg-white/10 transition"

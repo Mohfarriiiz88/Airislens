@@ -87,15 +87,15 @@ export default function AdminGaleriPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-white">Galeri Foto</h1>
-          <p className="text-sm text-white/60">
+          <h1 className="text-[40px] font-normal text-black">Galeri Foto</h1>
+          <p className="text-lg font-normal text-black">
             Kelola foto yang tampil di website Beranjak Photo
           </p>
         </div>
 
         <button
           onClick={openCreate}
-          className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-black hover:opacity-90"
+          className="rounded-xl bg-white px-4 py-2 text-sm font-normal text-black hover:opacity-90"
         >
           + Tambah Foto
         </button>

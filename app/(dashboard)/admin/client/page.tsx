@@ -49,10 +49,10 @@ export default function AdminClientPage() {
     <div className="space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-semibold text-white">
+        <h1 className="text-[40px] font-normal text-black">
           Client Management
         </h1>
-        <p className="text-sm text-white/60">
+        <p className="text-lg text-black">
           Kelola data klien Beranjak Photo
         </p>
       </div>
@@ -64,33 +64,33 @@ export default function AdminClientPage() {
           placeholder="Cari nama client..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full md:w-72 rounded-xl border border-white/10 bg-[#1A1A1A] px-4 py-2 text-sm text-white outline-none focus:border-white/30"
+          className="w-full md:w-72 rounded-xl border border-black/20 bg-[#ffffff] px-4 py-2 text-sm text-black outline-none focus:border-black/20"
         />
       </div>
 
       {/* Client Table */}
-      <div className="rounded-2xl border border-white/10 bg-[#111111] overflow-hidden">
-        <table className="w-full text-sm text-left text-white">
-          <thead className="bg-[#1A1A1A] text-white/70">
+      <div className="rounded-2xl border border-black/20 bg-[#ffffff] overflow-hidden">
+        <table className="w-full text-sm text-left text-black">
+          <thead className="bg-[#ffffff] text-black text-center">
             <tr>
-              <th className="px-6 py-4">Nama</th>
-              <th className="px-6 py-4">WhatsApp</th>
-              <th className="px-6 py-4">Total Booking</th>
-              <th className="px-6 py-4">Last Booking</th>
-              <th className="px-6 py-4">Status Terakhir</th>
-              <th className="px-6 py-4">Action</th>
+              <th className="text-left font-medium px-6 py-4">Nama</th>
+              <th className="font-medium px-6 py-4">WhatsApp</th>
+              <th className="font-medium px-6 py-4">Total Booking</th>
+              <th className="font-medium px-6 py-4">Last Booking</th>
+              <th className="font-medium px-6 py-4">Status Terakhir</th>
+              <th className="font-medium px-6 py-4">Action</th>
             </tr>
           </thead>
           <tbody>
             {filteredClients.map((client) => (
               <tr
                 key={client.id}
-                className="border-t border-white/5 hover:bg-white/5 transition"
+                className="text-center border-t border-black/20 hover:bg-white/10 transition"
               >
-                <td className="px-6 py-4 font-medium">
+                <td className="px-6 py-4 text-left">
                   {client.name}
                 </td>
-                <td className="px-6 py-4 text-white/70">
+                <td className="px-6 py-4">
                   {client.phone}
                 </td>
                 <td className="px-6 py-4">
