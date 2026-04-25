@@ -9,7 +9,7 @@ import {
   Image,
   ClipboardList,
 } from "lucide-react";
-import { LogOut } from "lucide-react";
+import { LogOut,ExternalLink  } from "lucide-react";
 
 const menu = [
   { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
@@ -77,15 +77,45 @@ export default function Sidebar() {
           );
         })}
       </nav>
-      <div className="absolute bottom-20 p-4">
-        <Link
-          href="/login"
-          className="flex items-center gap-3 px-3 py-3 rounded-xl text-[16px] transition-all hover:bg-black/10"
-        >
-          <LogOut size={20} strokeWidth={1.5} />
-          {!collapsed && <span>Logout</span>}
-        </Link>
-      </div>
+      <div className="mt-auto px-2 pt-10 space-y-2">
+
+  {/* ===== BACK TO WEBSITE ===== */}
+  <Link
+    href="/"
+    className={`
+      w-full flex items-center gap-3 px-3 py-3 mt-60 rounded-xl
+      text-[16px] text-black
+      hover:bg-black hover:text-white
+      transition-all
+      ${collapsed ? "justify-center" : ""}
+    `}
+  >
+    <div className="w-[24px] flex justify-center items-center">
+      <ExternalLink size={20} strokeWidth={1.5} />
+    </div>
+
+    {!collapsed && <span>Back to Website</span>}
+  </Link>
+
+  {/* ===== LOGOUT ===== */}
+  <button
+    className={`
+      w-full flex items-center gap-3 px-3 py-3 rounded-xl
+      text-[16px] text-black
+      hover:bg-red-500 hover:text-white
+      transition-all
+      ${collapsed ? "justify-center" : ""}
+    `}
+    onClick={() => console.log("logout")}
+  >
+    <div className="w-[24px] flex justify-center items-center">
+      <LogOut size={20} strokeWidth={1.5} />
+    </div>
+
+    {!collapsed && <span>Logout</span>}
+  </button>
+
+</div>
     </aside>
     
   );
