@@ -1,12 +1,23 @@
-
 import Sidebar from '@/components/dashboard/Sidebar'
 import Header from '@/components/dashboard/Header'
+import { getServerSession } from '@/lib/auth/session'
+import { redirect } from 'next/navigation'
 
-export default function DashboardLayout({
+export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  const session = await getServerSession()
+
+  if (!session) {
+    redirect('/login')
+  }
+
+  if (session.role !== 'admin') {
+    redirect('/')
+  }
+
   return (
     <div className="min-h-screen bg-[#f5f5f5] text-black flex">
       <Sidebar />

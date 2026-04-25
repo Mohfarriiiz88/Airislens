@@ -2,19 +2,30 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 const navItems = [
   { name: "Home", href: "/" },
-  { name: "Airis", href: "/login" },
   { name: "FindFG", href: "/findfg" },
-  { name: "Gallery", href: "/gallery" },
+  { name: "Gallery", href: "/profile  " },
+  { name: "Partner", href: "/partner" },
 ];
 
 type NavbarTone = "light" | "dark";
+type NavbarUser = {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+};
 
-function getLinkClass(pathname: string, href: string, mobile = false, dark = false) {
+function getLinkClass(
+  pathname: string,
+  href: string,
+  mobile = false,
+  dark = false
+) {
   const baseClass = mobile
     ? "block rounded-full px-4 py-3 text-lg transition-colors"
     : "transition-colors duration-200";
@@ -30,10 +41,13 @@ function getLinkClass(pathname: string, href: string, mobile = false, dark = fal
 
 export default function Navbar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [desktopTone, setDesktopTone] = useState<NavbarTone>("light");
+  const [user, setUser] = useState<NavbarUser | null>(null);
 
+  // ================= SCROLL DETECT =================
   useEffect(() => {
     const updateScrollState = () => {
       setIsScrolled(window.scrollY > 12);
@@ -47,6 +61,44 @@ export default function Navbar() {
     };
   }, []);
 
+  // ================= 🔥 SCROLL LOCK =================
+  useEffect(() => {
+    if (!isMenuOpen) {
+      return;
+    }
+
+    const scrollY = window.scrollY;
+    const { body, documentElement } = document;
+
+    const previousBodyOverflow = body.style.overflow;
+    const previousBodyPosition = body.style.position;
+    const previousBodyTop = body.style.top;
+    const previousBodyLeft = body.style.left;
+    const previousBodyRight = body.style.right;
+    const previousBodyWidth = body.style.width;
+    const previousHtmlOverflow = documentElement.style.overflow;
+
+    documentElement.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.left = "0";
+    body.style.right = "0";
+    body.style.width = "100%";
+
+    return () => {
+      documentElement.style.overflow = previousHtmlOverflow;
+      body.style.overflow = previousBodyOverflow;
+      body.style.position = previousBodyPosition;
+      body.style.top = previousBodyTop;
+      body.style.left = previousBodyLeft;
+      body.style.right = previousBodyRight;
+      body.style.width = previousBodyWidth;
+      window.scrollTo(0, scrollY);
+    };
+  }, [isMenuOpen]);
+
+  // ================= NAVBAR TONE =================
   useEffect(() => {
     const isDesktopViewport = window.matchMedia("(min-width: 768px)").matches;
     const themedSections = Array.from(
@@ -59,9 +111,7 @@ export default function Navbar() {
         setDesktopTone("light");
       });
 
-      return () => {
-        cancelAnimationFrame(frameId);
-      };
+      return () => cancelAnimationFrame(frameId);
     }
 
     const updateDesktopTone = () => {
@@ -84,128 +134,188 @@ export default function Navbar() {
         }
       }
 
-      setDesktopTone((currentTone) =>
-        currentTone === nextTone ? currentTone : nextTone
-      );
+      setDesktopTone((prev) => (prev === nextTone ? prev : nextTone));
     };
 
-    const requestDesktopToneUpdate = () => {
+    const requestUpdate = () => {
       cancelAnimationFrame(frameId);
-      frameId = window.requestAnimationFrame(updateDesktopTone);
+      frameId = requestAnimationFrame(updateDesktopTone);
     };
 
-    requestDesktopToneUpdate();
-    window.addEventListener("scroll", requestDesktopToneUpdate, { passive: true });
-    window.addEventListener("resize", requestDesktopToneUpdate);
+    requestUpdate();
+    window.addEventListener("scroll", requestUpdate, { passive: true });
+    window.addEventListener("resize", requestUpdate);
 
     return () => {
       cancelAnimationFrame(frameId);
-      window.removeEventListener("scroll", requestDesktopToneUpdate);
-      window.removeEventListener("resize", requestDesktopToneUpdate);
+      window.removeEventListener("scroll", requestUpdate);
+      window.removeEventListener("resize", requestUpdate);
+    };
+  }, [pathname]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadUser() {
+      try {
+        const response = await fetch("/api/auth/me", {
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          if (isMounted) {
+            setUser(null);
+          }
+          return;
+        }
+
+        const data = (await response.json()) as {
+          user?: NavbarUser;
+        };
+
+        if (isMounted) {
+          setUser(data.user ?? null);
+        }
+      } catch {
+        if (isMounted) {
+          setUser(null);
+        }
+      }
+    }
+
+    loadUser();
+
+    return () => {
+      isMounted = false;
     };
   }, [pathname]);
 
   const mobileHeaderClass = isScrolled
     ? "bg-white/85 shadow-[0_12px_30px_rgba(0,0,0,0.08)] backdrop-blur-xl"
     : "bg-transparent";
+
   const mobileIconClass = isScrolled ? "bg-black" : "bg-white";
   const mobileLogoClass = isScrolled ? "brightness-0" : "";
-  const mobileMenuClass = isScrolled
-    ? "border-black/10 bg-white/95 text-black shadow-[0_20px_60px_rgba(0,0,0,0.15)]"
-    : "border-white/15 bg-black/95 text-white shadow-[0_20px_60px_rgba(0,0,0,0.45)]";
+
   const isDesktopDark = desktopTone === "dark";
   const desktopLogoClass = isDesktopDark ? "brightness-0" : "";
+  const accountHref = user ? "/profile" : "/login";
+  const accountLabel = user ? user.name : "Login";
+
+  function handleMobileAccountClick() {
+    setIsMenuOpen(false);
+    router.push(accountHref);
+  }
 
   return (
     <header className="fixed inset-x-0 top-0 z-[9999]">
       <div
-        className={`flex items-center justify-between px-6 py-5 transition-all duration-300 md:px-8 md:bg-transparent md:shadow-none md:backdrop-blur-none ${mobileHeaderClass}`}
+        className={`flex items-center justify-between px-6 py-5 transition-all duration-300 md:px-8 ${mobileHeaderClass}`}
       >
+        {/* LOGO */}
         <Link href="/" className="relative z-[10002] flex items-center">
           <Image
-  src="/svg/logo.svg"
-  alt="AirisLens Logo"
-  width={50}
-  height={50}
-  className={`h-6 w-auto object-contain transition duration-300 md:hidden ${mobileLogoClass}`}
-  priority
-/>
-
-<Image
-  src="/svg/logo.svg"
-  alt="AirisLens Logo"
-  width={50}
-  height={50}
-  className={`hidden h-6 w-auto object-contain transition duration-300 md:block ${desktopLogoClass}`}
-  priority
-/>
+            src="/svg/logo.svg"
+            alt="AirisLens Logo"
+            width={50}
+            height={50}
+            className={`h-6 w-auto object-contain md:hidden ${mobileLogoClass}`}
+            priority
+          />
+          <Image
+            src="/svg/logo.svg"
+            alt="AirisLens Logo"
+            width={50}
+            height={50}
+            className={`hidden h-6 w-auto object-contain md:block ${desktopLogoClass}`}
+            priority
+          />
         </Link>
 
-        <nav className="hidden items-center gap-10 text-[20px] font-normal md:flex">
-          {navItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={getLinkClass(pathname, item.href, false, isDesktopDark)}
-            >
-              {item.name}
-            </Link>
-          ))}
-        </nav>
+        {/* DESKTOP NAV */}
+        <div className="hidden items-center gap-8 md:flex">
+          <nav className="flex items-center gap-10 text-[20px] font-normal">
+            {navItems.map((item) => (
+              <Link
+                key={item.name}
+                href={item.href}
+                className={getLinkClass(
+                  pathname,
+                  item.href,
+                  false,
+                  isDesktopDark
+                )}
+              >
+                {item.name}
+              </Link>
+            ))}
+          </nav>
 
+          <Link
+            href={accountHref}
+            className={`
+              max-w-[220px] truncate px-5 py-2 rounded-full text-[18px] transition-all
+              ${
+                isDesktopDark
+                  ? "bg-black text-white hover:bg-black/80"
+                  : "bg-white text-black hover:bg-white/80"
+              }
+            `}
+          >
+            {accountLabel}
+          </Link>
+        </div>
+
+        {/* MOBILE MENU */}
         <div className="relative md:hidden">
           <button
-            type="button"
-            aria-label="Toggle navigation menu"
-            aria-expanded={isMenuOpen}
-            aria-controls="mobile-nav-menu"
-            onClick={() => setIsMenuOpen((open) => !open)}
-            className="relative z-[10002] flex touch-manipulation flex-col gap-1.5"
+            onClick={() => setIsMenuOpen((prev) => !prev)}
+            className="relative z-[10002] flex flex-col gap-1.5"
           >
             <span
-              className={`h-[2px] w-6 transition-transform duration-200 ${mobileIconClass} ${
+              className={`h-[2px] w-6 ${mobileIconClass} ${
                 isMenuOpen ? "translate-y-[8px] rotate-45" : ""
               }`}
             />
             <span
-              className={`h-[2px] w-6 transition-opacity duration-200 ${mobileIconClass} ${
+              className={`h-[2px] w-6 ${mobileIconClass} ${
                 isMenuOpen ? "opacity-0" : ""
               }`}
             />
             <span
-              className={`h-[2px] w-6 transition-transform duration-200 ${mobileIconClass} ${
+              className={`h-[2px] w-6 ${mobileIconClass} ${
                 isMenuOpen ? "-translate-y-[8px] -rotate-45" : ""
               }`}
             />
           </button>
 
-          {isMenuOpen ? (
-            <button
-              type="button"
-              aria-label="Close navigation menu"
-              onClick={() => setIsMenuOpen(false)}
-              className="fixed inset-0 z-[9997] bg-black/45"
-            />
-          ) : null}
-
+          {/* FULLSCREEN MENU */}
           <nav
-            id="mobile-nav-menu"
-            className={`fixed inset-x-4 top-[88px] z-[10001] rounded-[28px] border p-4 backdrop-blur-xl transition-all duration-300 ${
+            className={`fixed inset-0 z-[10001] flex flex-col justify-center items-center bg-white/90 backdrop-blur-xl transition-all duration-300 ${
               isMenuOpen
-                ? "visible translate-y-0 opacity-100"
-                : "invisible -translate-y-2 opacity-0 pointer-events-none"
-            } ${mobileMenuClass}`}
+                ? "visible opacity-100"
+                : "invisible opacity-0 pointer-events-none"
+            }`}
           >
-            {navItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setIsMenuOpen(false)}
-                className={getLinkClass(pathname, item.href, true, isScrolled)}
-              >
-                {item.name}
-              </Link>
-            ))}
+            <div className="flex flex-col items-center gap-6 text-[24px]">
+              {navItems.map((item) => (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  onClick={() => setIsMenuOpen(false)}
+                  className="text-black transition hover:opacity-70"
+                >
+                  {item.name}
+                </Link>
+              ))}
+            </div>
+
+            <button
+              onClick={handleMobileAccountClick}
+              className="mt-10 max-w-[260px] truncate rounded-full bg-black px-6 py-3 text-[18px] text-white transition hover:bg-black/80"
+            >
+              {accountLabel}
+            </button>
           </nav>
         </div>
       </div>

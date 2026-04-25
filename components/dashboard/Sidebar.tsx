@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   Package,
@@ -21,6 +22,18 @@ const menu = [
 export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
+
+  async function handleLogout() {
+    try {
+      await fetch("/api/auth/logout", {
+        method: "POST",
+      });
+    } finally {
+      router.push("/login");
+      router.refresh();
+    }
+  }
 
   return (
     <aside
@@ -106,7 +119,7 @@ export default function Sidebar() {
       transition-all
       ${collapsed ? "justify-center" : ""}
     `}
-    onClick={() => console.log("logout")}
+    onClick={handleLogout}
   >
     <div className="w-[24px] flex justify-center items-center">
       <LogOut size={20} strokeWidth={1.5} />
