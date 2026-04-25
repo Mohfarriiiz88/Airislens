@@ -7,7 +7,7 @@ export default function StatCard({
 }) {
   return (
     <div className="rounded-2xl bg-[#ffffff] border border-black/20 p-5">
-      <div className="text-normal text-black">{title}</div>
+      <div className="text-medium text-18px text-black">{title}</div>
       <div className="mt-2 text-2xl font-medium">{value}</div>
     </div>
   )

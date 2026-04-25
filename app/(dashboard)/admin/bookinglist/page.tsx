@@ -61,10 +61,10 @@ export default function BookingListPage() {
     <div className="space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-semibold text-white">
+        <h1 className="text-3xl font-normal text-black">
           Booking Management
         </h1>
-        <p className="text-sm text-white/60">
+        <p className="text-lg text-black">
           Kelola seluruh booking pelanggan Beranjak Photo
         </p>
       </div>
@@ -76,13 +76,13 @@ export default function BookingListPage() {
           placeholder="Cari nama pelanggan..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full md:w-72 rounded-xl border border-white/10 bg-[#1A1A1A] px-4 py-2 text-sm text-white outline-none focus:border-white/30"
+          className="w-full md:w-72 rounded-xl border border-black/20 bg-[#ffffff] px-4 py-2 text-sm text-black outline-none focus:border-white/30"
         />
 
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="rounded-xl border border-white/10 bg-[#1A1A1A] px-4 py-2 text-sm text-white outline-none focus:border-white/30"
+          className="rounded-xl border border-black/20 bg-[#ffffff] px-4 py-2 text-sm text-black outline-none focus:border-white/30"
         >
           <option value="All">Semua Status</option>
           <option value="Pending">Pending</option>
@@ -93,24 +93,24 @@ export default function BookingListPage() {
       </div>
 
       {/* Table */}
-      <div className="rounded-2xl border border-white/10 bg-[#111111] overflow-hidden">
-        <table className="w-full text-sm text-left text-white">
-          <thead className="bg-[#1A1A1A] text-white/70">
+      <div className="rounded-2xl border border-black/20 bg-[#ffffff] overflow-hidden">
+        <table className="w-full text-sm text-left text-black">
+          <thead className="bg-[#ffffff] text-black">
             <tr>
-              <th className="px-6 py-4">ID</th>
-              <th className="px-6 py-4">Nama</th>
-              <th className="px-6 py-4">Paket</th>
-              <th className="px-6 py-4">Tanggal</th>
-              <th className="px-6 py-4">Lokasi</th>
-              <th className="px-6 py-4">Status</th>
-              <th className="px-6 py-4">Action</th>
+              <th className="font-medium px-6 py-4">ID</th>
+              <th className="font-medium px-6 py-4">Nama</th>
+              <th className="font-medium px-6 py-4">Paket</th>
+              <th className="font-medium px-6 py-4">Tanggal</th>
+              <th className="font-medium px-6 py-4">Lokasi</th>
+              <th className="font-medium px-6 py-4">Status</th>
+              <th className="font-medium px-6 py-4">Action</th>
             </tr>
           </thead>
           <tbody>
             {filteredData.map((booking) => (
               <tr
                 key={booking.id}
-                className="border-t border-white/5 hover:bg-white/5 transition"
+                className="border-t border-black/20 hover:bg-white/10 transition"
               >
                 <td className="px-6 py-4">{booking.id}</td>
                 <td className="px-6 py-4">{booking.name}</td>
