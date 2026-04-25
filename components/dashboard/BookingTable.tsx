@@ -4,12 +4,12 @@ export default function BookingTable() {
       <div className="text-18px font-medium mb-4">Booking Terbaru</div>
 
       <table className="w-full text-normal">
-        <thead className="text-black font-normal">
+        <thead className="text-black font-medium">
           <tr className="">
-            <th className="text-left py-2 font-normal">Nama</th>
-            <th className="font-normal">Paket</th>
-            <th className="font-normal">Tanggal</th>
-            <th className="font-normal">Status</th>
+            <th className="text-left py-2 font-medium">Nama</th>
+            <th className="font-medium">Paket</th>
+            <th className="font-medium">Tanggal</th>
+            <th className="font-medium">Status</th>
           </tr>
         </thead>
         <tbody className="text-black">

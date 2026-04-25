@@ -127,7 +127,7 @@ export default function AdminGaleriPage() {
 
               <button
                 onClick={() => openDetail(item)}
-                className="mt-3 rounded-lg border border-white/10 px-3 py-1 text-xs hover:bg-white/10 transition"
+                className="mt-3 rounded-lg border border-black/20 px-3 py-1 text-xs hover:bg-black/10 transition"
               >
                 Detail
               </button>
@@ -136,7 +136,7 @@ export default function AdminGaleriPage() {
         ))}
 
         {items.length === 0 && (
-          <div className="col-span-full text-center text-white/50">
+          <div className="col-span-full text-center text-black/50">
             Belum ada foto di galeri
           </div>
         )}
@@ -145,8 +145,8 @@ export default function AdminGaleriPage() {
       {/* Modal */}
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
-          <div className="w-full max-w-md rounded-2xl bg-[#111111] p-6 border border-white/10">
-            <h2 className="text-lg font-semibold text-white mb-4">
+          <div className="w-full max-w-md rounded-2xl bg-[#ffffff] p-6 border border-black/20">
+            <h2 className="text-2xl font-normal text-black mb-4">
               {active ? 'Detail Foto' : 'Tambah Foto'}
             </h2>
 
@@ -155,7 +155,7 @@ export default function AdminGaleriPage() {
                 placeholder="Judul Foto"
                 value={form.title}
                 onChange={(e) => setForm({ ...form, title: e.target.value })}
-                className="w-full rounded-xl border border-white/10 bg-[#1A1A1A] px-4 py-2 text-sm text-white outline-none"
+                className="w-full rounded-xl border border-black/20 bg-[#f5f5f5] px-4 py-2 text-sm text-black outline-none"
               />
 
               <input
@@ -164,7 +164,7 @@ export default function AdminGaleriPage() {
                 onChange={(e) =>
                   setForm({ ...form, category: e.target.value })
                 }
-                className="w-full rounded-xl border border-white/10 bg-[#1A1A1A] px-4 py-2 text-sm text-white outline-none"
+                className="w-full rounded-xl border border-black/20 bg-[#f5f5f5] px-4 py-2 text-sm text-black outline-none"
               />
 
               <input
@@ -173,11 +173,11 @@ export default function AdminGaleriPage() {
                 onChange={(e) =>
                   setForm({ ...form, imageUrl: e.target.value })
                 }
-                className="w-full rounded-xl border border-white/10 bg-[#1A1A1A] px-4 py-2 text-sm text-white outline-none"
+                className="w-full rounded-xl border border-black/20 bg-[#f5f5f5] px-4 py-2 text-sm text-black outline-none"
               />
 
               {form.imageUrl && (
-                <div className="relative h-40 w-full rounded-xl overflow-hidden border border-white/10">
+                <div className="relative h-40 w-full rounded-xl overflow-hidden border border-black/20">
                   <Image
                     src={form.imageUrl}
                     alt="Preview"
@@ -201,13 +201,13 @@ export default function AdminGaleriPage() {
               <div className="flex gap-3">
                 <button
                   onClick={() => setOpen(false)}
-                  className="rounded-lg border border-white/10 px-4 py-2 text-sm text-white/70 hover:bg-white/10"
+                  className="rounded-lg border border-black/20 px-4 py-2 text-sm text-black/70 hover:bg-black/10"
                 >
                   Tutup
                 </button>
                 <button
                   onClick={submit}
-                  className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-black hover:opacity-90"
+                  className="rounded-lg  bg-black px-25 py-2 text-sm font-normal text-white hover:opacity-90"
                 >
                   Simpan
                 </button>
