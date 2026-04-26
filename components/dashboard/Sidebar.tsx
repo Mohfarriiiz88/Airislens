@@ -9,6 +9,7 @@ import {
   Package,
   Image,
   ClipboardList,
+  User,
 } from "lucide-react";
 import { LogOut,ExternalLink  } from "lucide-react";
 
@@ -17,6 +18,7 @@ const menu = [
   { label: "Booking", href: "/admin/bookinglist", icon: ClipboardList },
   { label: "Paket", href: "/admin/paket", icon: Package },
   { label: "Galeri", href: "/admin/galeri", icon: Image },
+  { label: "Profile", href: "/admin/profile", icon: User },
 ];
 
 export default function Sidebar() {

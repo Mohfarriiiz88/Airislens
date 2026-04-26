@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Image from 'next/image'
 
 type GalleryItem = {
@@ -35,8 +35,12 @@ export default function AdminGaleriPage() {
     imageUrl: '',
   })
 
+  // 🔥 NEW STATE FILE
+  const [file, setFile] = useState<File | null>(null)
+
   const openCreate = () => {
     setForm({ title: '', category: '', imageUrl: '' })
+    setFile(null)
     setActive(null)
     setOpen(true)
   }
@@ -48,11 +52,37 @@ export default function AdminGaleriPage() {
       category: item.category,
       imageUrl: item.imageUrl,
     })
+    setFile(null)
     setOpen(true)
   }
 
+  // 🔥 HANDLE FILE UPLOAD
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const selected = e.target.files?.[0]
+
+    if (selected) {
+      setFile(selected)
+
+      const previewUrl = URL.createObjectURL(selected)
+
+      setForm((prev) => ({
+        ...prev,
+        imageUrl: previewUrl,
+      }))
+    }
+  }
+
+  // 🔥 CLEANUP MEMORY (IMPORTANT)
+  useEffect(() => {
+    return () => {
+      if (form.imageUrl?.startsWith('blob:')) {
+        URL.revokeObjectURL(form.imageUrl)
+      }
+    }
+  }, [form.imageUrl])
+
   const submit = () => {
-    if (!form.title || !form.imageUrl) {
+    if (!form.title || !file) {
       alert('Judul dan gambar wajib diisi')
       return
     }
@@ -84,10 +114,12 @@ export default function AdminGaleriPage() {
 
   return (
     <div className="space-y-8">
-      {/* Header */}
+      {/* ===== HEADER ===== */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-[40px] font-normal text-black">Galeri Foto</h1>
+          <h1 className="text-[40px] font-normal text-black">
+            Galeri Foto
+          </h1>
           <p className="text-lg font-normal text-black">
             Kelola foto yang tampil di website Beranjak Photo
           </p>
@@ -95,13 +127,13 @@ export default function AdminGaleriPage() {
 
         <button
           onClick={openCreate}
-          className="rounded-xl bg-white px-4 py-2 text-sm font-normal text-black hover:opacity-90"
+          className="rounded-xl bg-white px-4 py-2 text-sm text-black hover:opacity-90"
         >
           + Tambah Foto
         </button>
       </div>
 
-      {/* Gallery Grid */}
+      {/* ===== GRID ===== */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
         {items.map((item) => (
           <div
@@ -142,40 +174,44 @@ export default function AdminGaleriPage() {
         )}
       </div>
 
-      {/* Modal */}
+      {/* ===== MODAL ===== */}
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
-          <div className="w-full max-w-md rounded-2xl bg-[#ffffff] p-6 border border-black/20">
-            <h2 className="text-2xl font-normal text-black mb-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 border border-black/20">
+            <h2 className="text-2xl text-black mb-4">
               {active ? 'Detail Foto' : 'Tambah Foto'}
             </h2>
 
             <div className="space-y-4">
+              {/* TITLE */}
               <input
                 placeholder="Judul Foto"
                 value={form.title}
-                onChange={(e) => setForm({ ...form, title: e.target.value })}
-                className="w-full rounded-xl border border-black/20 bg-[#f5f5f5] px-4 py-2 text-sm text-black outline-none"
+                onChange={(e) =>
+                  setForm({ ...form, title: e.target.value })
+                }
+                className="w-full rounded-xl border border-black/20 bg-[#f5f5f5] px-4 py-2 text-sm text-black"
               />
 
+              {/* CATEGORY */}
               <input
-                placeholder="Kategori (Portrait / Couple / dll)"
+                placeholder="Kategori"
                 value={form.category}
                 onChange={(e) =>
                   setForm({ ...form, category: e.target.value })
                 }
-                className="w-full rounded-xl border border-black/20 bg-[#f5f5f5] px-4 py-2 text-sm text-black outline-none"
+                className="w-full rounded-xl border border-black/20 bg-[#f5f5f5] px-4 py-2 text-sm text-black"
               />
 
+              {/* 🔥 FILE UPLOAD */}
               <input
-                placeholder="URL Gambar"
-                value={form.imageUrl}
-                onChange={(e) =>
-                  setForm({ ...form, imageUrl: e.target.value })
-                }
-                className="w-full rounded-xl border border-black/20 bg-[#f5f5f5] px-4 py-2 text-sm text-black outline-none"
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                className="w-full rounded-xl border border-black/20 bg-[#f5f5f5] px-4 py-2 text-sm"
               />
 
+              {/* PREVIEW */}
               {form.imageUrl && (
                 <div className="relative h-40 w-full rounded-xl overflow-hidden border border-black/20">
                   <Image
@@ -188,13 +224,14 @@ export default function AdminGaleriPage() {
               )}
             </div>
 
+            {/* ACTION */}
             <div className="mt-6 flex justify-between">
               {active && (
                 <button
                   onClick={() => remove(active.id)}
-                  className="rounded-lg border border-red-500/30 px-4 py-2 text-sm text-red-400 hover:bg-red-500/10"
+                  className="rounded-lg border border-red-500/30 px-4 py-2 text-sm text-red-500 hover:bg-red-500/10"
                 >
-                  Hapus Foto
+                  Hapus
                 </button>
               )}
 
@@ -205,9 +242,10 @@ export default function AdminGaleriPage() {
                 >
                   Tutup
                 </button>
+
                 <button
                   onClick={submit}
-                  className="rounded-lg  bg-black px-25 py-2 text-sm font-normal text-white hover:opacity-90"
+                  className="rounded-lg bg-black px-6 py-2 text-sm text-white hover:opacity-90"
                 >
                   Simpan
                 </button>
