@@ -41,3 +41,23 @@ CREATE TABLE IF NOT EXISTS partner_packages (
   PRIMARY KEY (id),
   KEY partner_packages_user_id_idx (user_id)
 );
+
+CREATE TABLE IF NOT EXISTS partner_applications (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  name VARCHAR(100) NOT NULL,
+  email VARCHAR(191) NOT NULL,
+  phone VARCHAR(30) NOT NULL,
+  location VARCHAR(100) NOT NULL,
+  category VARCHAR(100) NOT NULL,
+  experience VARCHAR(100) NOT NULL,
+  portfolio_link VARCHAR(255) NOT NULL,
+  about_you TEXT NOT NULL,
+  status ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending',
+  submitted_by_user_id BIGINT UNSIGNED,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY partner_applications_email_idx (email),
+  KEY partner_applications_status_idx (status),
+  KEY partner_applications_user_id_idx (submitted_by_user_id)
+);

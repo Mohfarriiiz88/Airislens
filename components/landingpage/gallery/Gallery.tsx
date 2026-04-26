@@ -1,24 +1,46 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Image from "next/image";
 
-// ✅ DUMMY DATA IMAGE
-const galleryData = [
-  { id: 1, image: "/images/4.JPG", name: "Beranjak Photo", category: "Wedding" },
-  { id: 2, image: "/images/2.JPG", name: "Swaraphoto Studio", category: "Prewedding" },
-  { id: 3, image: "/images/3.JPG", name: "Agata Photo", category: "Event" },
-  { id: 4, image: "/images/4.JPG", name: "Mono Capture", category: "Product" },
-  { id: 5, image: "/images/5.JPG", name: "Gradia Studio", category: "Graduation" },
-  { id: 6, image: "/images/6.JPG", name: "Velour Visual", category: "Wedding" },
-  { id: 7, image: "/images/7.JPG", name: "Noir Studio", category: "Event" },
-  { id: 8, image: "/images/8.JPG", name: "Aura Shot", category: "Prewedding" },
-  { id: 9, image: "/images/9.JPG", name: "Beranjak Photo", category: "Wedding" },
-  { id: 10, image: "/images/8.JPG", name: "Agata Photo", category: "Event" },
-  { id: 11, image: "/images/5.JPG", name: "Mono Capture", category: "Product" },
-  { id: 12, image: "/images/2.JPG", name: "Velour Visual", category: "Wedding" },
-];
+interface GalleryItem {
+  id: number;
+  title: string;
+  category: string;
+  imageUrl: string;
+}
 
 export default function Gallery() {
+  const [galleryData, setGalleryData] = useState<GalleryItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchGallery = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch("/api/gallery");
+
+        if (!response.ok) {
+          throw new Error("Gagal mengambil data galeri");
+        }
+
+        const data = await response.json();
+        setGalleryData(data.items || []);
+        setError(null);
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "Terjadi kesalahan saat loading"
+        );
+        setGalleryData([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchGallery();
+  }, []);
+
   return (
     <section
       data-navbar-tone="dark"
@@ -36,31 +58,54 @@ export default function Gallery() {
         </p>
       </div>
 
-      {/* ================= GRID ================= */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-        {galleryData.map((item) => (
-          <div
-            key={item.id}
-            className="relative w-full h-[260px] rounded-sm overflow-hidden group cursor-pointer"
-          >
-            {/* IMAGE */}
-            <Image
-              src={item.image}
-              alt={item.name}
-              fill
-              className="object-cover"
-            />
+      {/* ================= LOADING STATE ================= */}
+      {loading && (
+        <div className="flex justify-center items-center min-h-[400px]">
+          <div className="text-black text-[18px]">Memuat galeri...</div>
+        </div>
+      )}
 
-            {/* OVERLAY */}
-            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-end p-4">
-              <div className="text-white text-[18px]">
-                <p className="font-normal">{item.name}</p>
-                <p className="text-[16px] opacity-80">{item.category}</p>
+      {/* ================= ERROR STATE ================= */}
+      {error && !loading && (
+        <div className="flex justify-center items-center min-h-[400px]">
+          <div className="text-red-500 text-[18px]">{error}</div>
+        </div>
+      )}
+
+      {/* ================= GRID ================= */}
+      {!loading && !error && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          {galleryData.length > 0 ? (
+            galleryData.map((item) => (
+              <div
+                key={item.id}
+                className="relative w-full h-[260px] rounded-sm overflow-hidden group cursor-pointer"
+              >
+                {/* IMAGE */}
+                <Image
+                  src={item.imageUrl}
+                  alt={item.title}
+                  fill
+                  className="object-cover"
+                  sizes="(max-width: 768px) 50vw, 25vw"
+                />
+
+                {/* OVERLAY */}
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-end p-4">
+                  <div className="text-white text-[18px]">
+                    <p className="font-normal">{item.title}</p>
+                    <p className="text-[16px] opacity-80">{item.category}</p>
+                  </div>
+                </div>
               </div>
+            ))
+          ) : (
+            <div className="col-span-full text-center text-black text-[18px]">
+              Tidak ada foto di galeri
             </div>
-          </div>
-        ))}
-      </div>
+          )}
+        </div>
+      )}
     </section>
   );
 }
