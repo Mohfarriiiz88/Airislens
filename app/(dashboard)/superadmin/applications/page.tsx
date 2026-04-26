@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 type Application = {
   id: string
@@ -46,6 +46,17 @@ export default function ApplicationsPage() {
   const [data, setData] = useState(INITIAL_DATA)
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Application | null>(null)
+  const [openMenu, setOpenMenu] = useState<string | null>(null)
+
+  // 🔥 close dropdown ketika klik luar
+  useEffect(() => {
+    function handleClickOutside() {
+      setOpenMenu(null)
+    }
+
+    window.addEventListener('click', handleClickOutside)
+    return () => window.removeEventListener('click', handleClickOutside)
+  }, [])
 
   const filtered = data.filter((item) =>
     item.name.toLowerCase().includes(search.toLowerCase())
@@ -57,8 +68,6 @@ export default function ApplicationsPage() {
         item.id === id ? { ...item, status: 'Approved' } : item
       )
     )
-
-    alert('Berhasil approve partner')
   }
 
   function handleReject(id: string) {
@@ -67,8 +76,6 @@ export default function ApplicationsPage() {
         item.id === id ? { ...item, status: 'Rejected' } : item
       )
     )
-
-    alert('Pengajuan ditolak')
   }
 
   return (
@@ -127,38 +134,61 @@ export default function ApplicationsPage() {
                   <StatusBadge status={item.status} />
                 </td>
 
-                <td>
-                  <div className="flex justify-center gap-2 flex-wrap">
+                {/* ===== DROPDOWN ACTION ===== */}
+                <td className="relative">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setOpenMenu(openMenu === item.id ? null : item.id)
+                    }}
+                    className="px-2 py-1 rounded-lg hover:bg-black/10"
+                  >
+                    ⋮
+                  </button>
 
-                    {/* 👁 DETAIL */}
-                    <button
-                      onClick={() => setSelected(item)}
-                      className="px-3 py-1 text-xs rounded-lg bg-black/10"
+                  {openMenu === item.id && (
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute right-4 mt-2 w-36 bg-white border border-black/20 rounded-xl shadow-lg z-20"
                     >
-                      Detail
-                    </button>
-
-                    {/* ✅ APPROVE */}
-                    {item.status === 'Pending' && (
+                      {/* DETAIL */}
                       <button
-                        onClick={() => handleApprove(item.id)}
-                        className="px-3 py-1 text-xs rounded-lg bg-green-500/20 text-green-600"
+                        onClick={() => {
+                          setSelected(item)
+                          setOpenMenu(null)
+                        }}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-black/5"
                       >
-                        Approve
+                        Detail
                       </button>
-                    )}
 
-                    {/* ❌ REJECT */}
-                    {item.status === 'Pending' && (
-                      <button
-                        onClick={() => handleReject(item.id)}
-                        className="px-3 py-1 text-xs rounded-lg bg-red-500/20 text-red-600"
-                      >
-                        Reject
-                      </button>
-                    )}
+                      {/* APPROVE */}
+                      {item.status === 'Pending' && (
+                        <button
+                          onClick={() => {
+                            handleApprove(item.id)
+                            setOpenMenu(null)
+                          }}
+                          className="w-full text-left px-3 py-2 text-sm text-green-600 hover:bg-green-50"
+                        >
+                          Approve
+                        </button>
+                      )}
 
-                  </div>
+                      {/* REJECT */}
+                      {item.status === 'Pending' && (
+                        <button
+                          onClick={() => {
+                            handleReject(item.id)
+                            setOpenMenu(null)
+                          }}
+                          className="w-full text-left px-3 py-2 text-sm text-red-500 hover:bg-red-50"
+                        >
+                          Reject
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </td>
               </tr>
             ))}
@@ -176,9 +206,14 @@ export default function ApplicationsPage() {
 
       {/* ===== MODAL DETAIL ===== */}
       {selected && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 w-[400px] space-y-4">
-
+        <div
+          onClick={() => setSelected(null)}
+          className="fixed inset-0 bg-black/30 flex items-center justify-center z-50"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl p-6 w-[400px] space-y-4"
+          >
             <h2 className="text-lg font-medium">
               Detail Pengajuan
             </h2>
@@ -193,7 +228,7 @@ export default function ApplicationsPage() {
               <p><b>Portfolio:</b> {selected.portfolio}</p>
             </div>
 
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end">
               <button
                 onClick={() => setSelected(null)}
                 className="px-3 py-1 text-sm bg-black/10 rounded-lg"
@@ -201,7 +236,6 @@ export default function ApplicationsPage() {
                 Tutup
               </button>
             </div>
-
           </div>
         </div>
       )}
