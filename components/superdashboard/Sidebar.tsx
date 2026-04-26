@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { useRouter } from "next/navigation";
 import {
   LayoutDashboard,
-  ClipboardList,
+  Image,
   Users,
   UserStar,
   FileCheck,
@@ -18,6 +18,7 @@ const menu = [
   { label: "Clients", href: "/superadmin/client", icon: Users },
   { label: "Partners", href: "/superadmin/partners", icon: UserStar },
   { label: "Partners App", href: "/superadmin/applications", icon: FileCheck },
+  { label: "Gallery Control", href: "/superadmin/gallerycontrol", icon: Image },
 ];
 
 export default function Sidebar() {
@@ -97,7 +98,7 @@ export default function Sidebar() {
   <Link
     href="/"
     className={`
-      w-full flex items-center gap-3 px-3 py-3 mt-60 rounded-xl
+      w-full flex items-center gap-3 px-3 py-3 mt-36 rounded-xl
       text-[16px] text-black
       hover:bg-black hover:text-white
       transition-all

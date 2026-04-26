@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 type Application = {
   id: string
@@ -48,14 +48,21 @@ export default function ApplicationsPage() {
   const [selected, setSelected] = useState<Application | null>(null)
   const [openMenu, setOpenMenu] = useState<string | null>(null)
 
-  // 🔥 close dropdown ketika klik luar
+  // 🔥 ref untuk dropdown
+  const menuRef = useRef<HTMLDivElement | null>(null)
+
+  // 🔥 click outside FIX
   useEffect(() => {
-    function handleClickOutside() {
-      setOpenMenu(null)
+    function handleClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpenMenu(null)
+      }
     }
 
-    window.addEventListener('click', handleClickOutside)
-    return () => window.removeEventListener('click', handleClickOutside)
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
   }, [])
 
   const filtered = data.filter((item) =>
@@ -101,7 +108,7 @@ export default function ApplicationsPage() {
       />
 
       {/* ===== TABLE ===== */}
-      <div className="rounded-2xl border border-black/20 bg-white overflow-hidden">
+      <div className="rounded-2xl border border-black/20 bg-white">
         <table className="w-full text-sm text-center">
           <thead>
             <tr>
@@ -117,6 +124,7 @@ export default function ApplicationsPage() {
           <tbody>
             {filtered.map((item) => (
               <tr key={item.id} className="border-t border-black/20">
+                
                 <td className="text-left px-6 py-4">
                   <div>
                     <div className="font-medium">{item.name}</div>
@@ -134,62 +142,65 @@ export default function ApplicationsPage() {
                   <StatusBadge status={item.status} />
                 </td>
 
-                {/* ===== DROPDOWN ACTION ===== */}
+                {/* ===== DROPDOWN ===== */}
                 <td className="relative">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setOpenMenu(openMenu === item.id ? null : item.id)
-                    }}
-                    className="px-2 py-1 rounded-lg hover:bg-black/10"
-                  >
-                    ⋮
-                  </button>
+                  <div ref={menuRef}>
 
-                  {openMenu === item.id && (
-                    <div
-                      onClick={(e) => e.stopPropagation()}
-                      className="absolute right-4 mt-2 w-36 bg-white border border-black/20 rounded-xl shadow-lg z-20"
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setOpenMenu(openMenu === item.id ? null : item.id)
+                      }}
+                      className="px-2 py-1 rounded-lg hover:bg-black/10"
                     >
-                      {/* DETAIL */}
-                      <button
-                        onClick={() => {
-                          setSelected(item)
-                          setOpenMenu(null)
-                        }}
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-black/5"
-                      >
-                        Detail
-                      </button>
+                      ⋮
+                    </button>
 
-                      {/* APPROVE */}
-                      {item.status === 'Pending' && (
+                    {openMenu === item.id && (
+                      <div className="absolute right-0 mt-2 w-36 bg-white border border-black/20 rounded-xl shadow-lg z-20">
+
+                        {/* DETAIL */}
                         <button
                           onClick={() => {
-                            handleApprove(item.id)
+                            setSelected(item)
                             setOpenMenu(null)
                           }}
-                          className="w-full text-left px-3 py-2 text-sm text-green-600 hover:bg-green-50"
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-black/5"
                         >
-                          Approve
+                          Detail
                         </button>
-                      )}
 
-                      {/* REJECT */}
-                      {item.status === 'Pending' && (
-                        <button
-                          onClick={() => {
-                            handleReject(item.id)
-                            setOpenMenu(null)
-                          }}
-                          className="w-full text-left px-3 py-2 text-sm text-red-500 hover:bg-red-50"
-                        >
-                          Reject
-                        </button>
-                      )}
-                    </div>
-                  )}
+                        {/* APPROVE */}
+                        {item.status === 'Pending' && (
+                          <button
+                            onClick={() => {
+                              handleApprove(item.id)
+                              setOpenMenu(null)
+                            }}
+                            className="w-full text-left px-3 py-2 text-sm text-green-600 hover:bg-green-50"
+                          >
+                            Approve
+                          </button>
+                        )}
+
+                        {/* REJECT */}
+                        {item.status === 'Pending' && (
+                          <button
+                            onClick={() => {
+                              handleReject(item.id)
+                              setOpenMenu(null)
+                            }}
+                            className="w-full text-left px-3 py-2 text-sm text-red-500 hover:bg-red-50"
+                          >
+                            Reject
+                          </button>
+                        )}
+
+                      </div>
+                    )}
+                  </div>
                 </td>
+
               </tr>
             ))}
 
