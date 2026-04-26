@@ -227,7 +227,7 @@ export default function AdminPaketPage() {
                   <td className="px-6 py-4 text-center">
                     <button
                       onClick={() => openEdit(paket)}
-                      className="rounded-lg border border-white/10 px-3 py-1 text-xs transition hover:bg-white/10"
+                      className="rounded-lg border border-black/20 px-3 py-1 text-xs transition hover:bg-black/10"
                     >
                       Detail
                     </button>
@@ -249,8 +249,8 @@ export default function AdminPaketPage() {
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
-          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#111111] p-6">
-            <h2 className="mb-4 text-lg font-semibold text-white">
+          <div className="w-full max-w-md rounded-2xl border border-black/20 bg-[#f5f5f5f5] p-6">
+            <h2 className="mb-4 text-lg font-medium text-black">
               {editing ? "Edit Paket" : "Tambah Paket"}
             </h2>
 
@@ -261,7 +261,7 @@ export default function AdminPaketPage() {
                 onChange={(event) =>
                   setForm((prev) => ({ ...prev, name: event.target.value }))
                 }
-                className="w-full rounded-xl border border-white/10 bg-[#1A1A1A] px-4 py-2 text-sm text-white outline-none"
+                className="w-full rounded-xl border border-black/20 bg-[#f5f5f5f5] px-4 py-2 text-sm text-black outline-none"
               />
 
               <input
@@ -270,7 +270,7 @@ export default function AdminPaketPage() {
                 onChange={(event) =>
                   setForm((prev) => ({ ...prev, duration: event.target.value }))
                 }
-                className="w-full rounded-xl border border-white/10 bg-[#1A1A1A] px-4 py-2 text-sm text-white outline-none"
+                className="w-full rounded-xl border border-black/20 bg-[#f5f5f5f5] px-4 py-2 text-sm text-black outline-none"
               />
 
               <input
@@ -280,7 +280,7 @@ export default function AdminPaketPage() {
                 onChange={(event) =>
                   setForm((prev) => ({ ...prev, price: Number(event.target.value) }))
                 }
-                className="w-full rounded-xl border border-white/10 bg-[#1A1A1A] px-4 py-2 text-sm text-white outline-none"
+                className="w-full rounded-xl border border-black/20 bg-[#f5f5f5f5] px-4 py-2 text-sm text-black outline-none"
               />
 
               <textarea
@@ -289,7 +289,7 @@ export default function AdminPaketPage() {
                 onChange={(event) =>
                   setForm((prev) => ({ ...prev, description: event.target.value }))
                 }
-                className="min-h-[90px] w-full rounded-xl border border-white/10 bg-[#1A1A1A] px-4 py-2 text-sm text-white outline-none"
+                className="min-h-[90px] w-full rounded-xl border border-black/20 bg-[#f5f5f5f5] px-4 py-2 text-sm text-black outline-none"
               />
             </div>
 
@@ -306,14 +306,14 @@ export default function AdminPaketPage() {
               <div className="flex gap-3">
                 <button
                   onClick={() => setOpen(false)}
-                  className="rounded-lg border border-white/10 px-4 py-2 text-sm text-white/70 hover:bg-white/10"
+                  className="rounded-lg border bg-black px-4 py-2 text-sm text-white hover:bg-black/10"
                 >
                   Batal
                 </button>
                 <button
                   onClick={submit}
                   disabled={isSaving}
-                  className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-black hover:opacity-90 disabled:opacity-70"
+                  className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black hover:opacity-90 disabled:opacity-70"
                 >
                   {isSaving ? "Menyimpan..." : "Simpan"}
                 </button>

@@ -190,7 +190,7 @@ export default function AdminGaleriPage() {
           )
         );
       } else if (data.item) {
-        setItems((prev) => [data.item as GalleryItem, ...prev]);
+        setItems((prev) => [data.item, ...prev]);
       }
 
       setOpen(false);
@@ -290,12 +290,12 @@ export default function AdminGaleriPage() {
               </div>
 
               <div className="p-4">
-                <p className="text-sm font-medium text-white">{item.title}</p>
+                <p className="text-[20px] font-medium text-white">{item.title}</p>
                 <p className="text-xs text-white/60">{item.category}</p>
 
                 <button
                   onClick={() => openDetail(item)}
-                  className="mt-3 rounded-lg border border-black/20 px-3 py-1 text-xs transition hover:bg-black/10"
+                  className="mt-3 rounded-lg border text-white border-white/20 px-6 py-1 text-xs transition hover:bg-white/10"
                 >
                   Detail
                 </button>
