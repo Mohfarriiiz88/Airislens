@@ -1,24 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pencil } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-type ProfileProps = {
-  initialUser: {
-    name: string;
-    email: string;
-  };
-};
-
-export default function Profile({ initialUser }: ProfileProps) {
+export default function Profile() {
   const router = useRouter();
 
+  const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(true);
+
   const [form, setForm] = useState({
-    name: initialUser.name,
-    email: initialUser.email,
+    name: "",
+    email: "",
     phone: "",
     password: "********",
+  });
+
+  const [initial, setInitial] = useState({
+    name: "",
+    email: "",
+    phone: "",
   });
 
   const [modal, setModal] = useState<{
@@ -29,8 +31,54 @@ export default function Profile({ initialUser }: ProfileProps) {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
+  // 🔥 FIX UTAMA: FETCH DATA TERBARU
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const res = await fetch("/api/auth/me", {
+          cache: "no-store", // 🔥 penting agar tidak cache
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+          const user = data.user;
+
+          setForm({
+            name: user.name || "",
+            email: user.email || "",
+            phone: user.phone || "",
+            password: "********",
+          });
+
+          setInitial({
+            name: user.name || "",
+            email: user.email || "",
+            phone: user.phone || "",
+          });
+        }
+      } catch (err) {
+        console.error("FETCH USER ERROR:", err);
+      } finally {
+        setFetching(false);
+      }
+    };
+
+    fetchUser();
+  }, []);
+
+  const isChanged =
+    form.name !== initial.name ||
+    form.email !== initial.email ||
+    form.phone !== initial.phone;
+
   // ================= ACTION =================
   const handleSave = () => {
+    if (!form.name || !form.email) {
+      alert("Name dan email wajib diisi");
+      return;
+    }
+
     setModal({ type: "save" });
   };
 
@@ -40,7 +88,44 @@ export default function Profile({ initialUser }: ProfileProps) {
 
   const confirmAction = async () => {
     if (modal.type === "save") {
-      console.log("UPDATED DATA:", form);
+      try {
+        setLoading(true);
+
+        const res = await fetch("/api/profile", {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: form.name,
+            email: form.email,
+            phone: form.phone,
+          }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          alert(data.message || "Gagal update profile");
+          return;
+        }
+
+        alert("Profile berhasil diupdate");
+
+        // 🔥 update state agar tidak kembali ke data lama
+        setInitial({
+          name: form.name,
+          email: form.email,
+          phone: form.phone,
+        });
+
+        router.refresh();
+      } catch (err) {
+        console.error(err);
+        alert("Terjadi kesalahan");
+      } finally {
+        setLoading(false);
+      }
     }
 
     if (modal.type === "logout") {
@@ -56,6 +141,18 @@ export default function Profile({ initialUser }: ProfileProps) {
 
     setModal({ type: null });
   };
+
+  // 🔥 LOADING (tidak merusak desain)
+  if (fetching) {
+    return (
+      <section
+        data-navbar-tone="dark"
+        className="min-h-screen mt-10 bg-white px-6 md:px-20 py-16 font-[NeueHaas] text-black flex items-center justify-center"
+      >
+        Loading profile...
+      </section>
+    );
+  }
 
   return (
     <section
@@ -103,9 +200,10 @@ export default function Profile({ initialUser }: ProfileProps) {
         <div className="flex gap-4 pt-4">
           <button
             onClick={handleSave}
-            className="bg-black text-white px-6 py-3 rounded-md text-[16px] hover:bg-black/80 transition"
+            disabled={!isChanged || loading}
+            className="bg-black text-white px-6 py-3 rounded-md text-[16px] hover:bg-black/80 transition disabled:opacity-60"
           >
-            Save Changes
+            {loading ? "Saving..." : "Save Changes"}
           </button>
 
           <button
@@ -121,20 +219,16 @@ export default function Profile({ initialUser }: ProfileProps) {
       {modal.type && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
           <div className="bg-white p-8 rounded-lg w-[90%] max-w-sm text-center">
-
-            {/* TITLE */}
             <h2 className="text-[20px] mb-3">
               {modal.type === "save" ? "Save Changes?" : "Logout?"}
             </h2>
 
-            {/* DESC */}
             <p className="text-[16px] mb-6">
               {modal.type === "save"
                 ? "Are you sure you want to update your profile?"
                 : "Are you sure you want to logout?"}
             </p>
 
-            {/* ACTION */}
             <div className="flex gap-3 justify-center">
               <button
                 onClick={() => setModal({ type: null })}

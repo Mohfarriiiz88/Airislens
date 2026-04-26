@@ -3,27 +3,54 @@ import { cookies } from "next/headers";
 
 import { verifyJwt } from "@/lib/auth/jwt";
 import { AUTH_COOKIE_NAME } from "@/lib/auth/session";
+import { findUserById } from "@/lib/auth/users";
 
 export async function GET() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
 
-  if (!token) {
-    return NextResponse.json({ message: "Unauthorized." }, { status: 401 });
+    if (!token) {
+      return NextResponse.json(
+        { message: "Unauthorized." },
+        { status: 401 }
+      );
+    }
+
+    const session = await verifyJwt(token);
+
+    if (!session) {
+      return NextResponse.json(
+        { message: "Unauthorized." },
+        { status: 401 }
+      );
+    }
+
+    // 🔥 ambil user dari DB (INI FIX UTAMA)
+    const user = await findUserById(Number(session.sub));
+
+    if (!user) {
+      return NextResponse.json(
+        { message: "User tidak ditemukan." },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        phone: user.phone || "", // 🔥 TAMBAH
+      },
+    });
+  } catch (error) {
+    console.error("ME API ERROR:", error);
+
+    return NextResponse.json(
+      { message: "Terjadi kesalahan." },
+      { status: 500 }
+    );
   }
-
-  const session = await verifyJwt(token);
-
-  if (!session) {
-    return NextResponse.json({ message: "Unauthorized." }, { status: 401 });
-  }
-
-  return NextResponse.json({
-    user: {
-      id: Number(session.sub),
-      name: session.name,
-      email: session.email,
-      role: session.role,
-    },
-  });
 }

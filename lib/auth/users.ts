@@ -10,6 +10,7 @@ export type UserRecord = RowDataPacket & {
   email: string;
   password_hash: string;
   role: UserRole;
+  phone: string | null;
   created_at: Date;
   updated_at: Date;
 };
@@ -138,18 +139,20 @@ export async function createUser(input: {
   };
 }
 
-export async function updateUserRole(input: {
+export async function updateUserProfile(input: {
   id: number;
-  role: Exclude<UserRole, "superadmin">;
+  name: string;
+  email: string;
+  phone: string;
 }) {
   const pool = getDbPool();
+
   await pool.execute(
     `
-      UPDATE users
-      SET role = ?
-      WHERE id = ?
-      LIMIT 1
+    UPDATE users
+    SET name = ?, email = ?, phone = ?
+    WHERE id = ?
     `,
-    [input.role, input.id]
+    [input.name, input.email, input.phone, input.id]
   );
 }
