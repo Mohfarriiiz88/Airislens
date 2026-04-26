@@ -1,99 +1,102 @@
-    "use client";
+"use client";
 
-    import { useState } from "react";
-    import Link from "next/link";
-    import Image from "next/image";
-    
+import Image from "next/image";
+import Link from "next/link";
+import { useMemo, useState } from "react";
 
-    const categories = [
-      "All",
-      "Wedding",
-      "Prewedding",
-      "Event",
-      "Product",
-      "Graduation",
-    ];
+type FindFgPartner = {
+  userId: number;
+  slug: string;
+  brandName: string;
+  category: string;
+  imageUrl: string;
+};
 
-    // ✅ DUMMY DATA (SCALABLE)
-    const photographers = [
-      { id: 1, name: "Beranjak Photo", category: "Wedding", slug: "beranjak-photo", image: "/svg/fg1.svg" },
-      { id: 2, name: "Swaraphoto Studio", category: "Prewedding", slug: "swaraphoto-studio", image: "/svg/fg2.svg" },
-      { id: 3, name: "Agata Photo", category: "Event", slug: "agata-photo", image: "/svg/fg3.svg" },
-      { id: 4, name: "Mono Capture", category: "Product", slug: "mono-capture", image: "/svg/fg4.svg" },
-      { id: 5, name: "Gradia Studio", category: "Graduation", slug: "gradia-studio", image: "/svg/fg4.svg" },
-      { id: 6, name: "Velour Visual", category: "Wedding", slug: "velour-visual", image: "/svg/fg3.svg" },
-      { id: 7, name: "Noir Studio", category: "Event", slug: "noir-studio", image: "/svg/fg2.svg" },
-      { id: 8, name: "Aura Shot", category: "Prewedding", slug: "aura-shot", image: "/svg/fg1.svg" },
-    ];
+export default function FindFg({
+  photographers,
+}: {
+  photographers: FindFgPartner[];
+}) {
+  const categories = useMemo(() => {
+    const uniqueCategories = Array.from(
+      new Set(
+        photographers
+          .map((item) => item.category.trim())
+          .filter(Boolean)
+      )
+    );
 
-    export default function FindFg() {
+    return ["All", ...uniqueCategories];
+  }, [photographers]);
   const [activeCategory, setActiveCategory] = useState("All");
 
   const filtered =
     activeCategory === "All"
       ? photographers
-      : photographers.filter((fg) => fg.category === activeCategory);
+      : photographers.filter((item) => item.category === activeCategory);
 
   return (
     <section
       data-navbar-tone="dark"
-      className="min-h-screen bg-[#f5f5f5] px-10 md:px-20 py-10"
+      className="min-h-screen bg-[#f5f5f5] px-10 py-10 md:px-20"
     >
-      {/* HEADER */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-16 mt-10">
-        <h1 className="text-black text-[40px] font-normal leading-tight">
+      <div className="mb-16 mt-10 flex flex-col items-start justify-between md:flex-row md:items-center">
+        <h1 className="text-[40px] font-normal leading-tight text-black">
           Choise Your <br /> Fotographer
         </h1>
 
-        <p className="max-w-md text-black mt-6 md:mt-0 text-[24px] leading-relaxed">
+        <p className="mt-6 max-w-md text-[24px] leading-relaxed text-black md:mt-0">
           We carefully select and recommend the best photographers to match
           your style, ensuring every moment you capture is nothing less than
           extraordinary.
         </p>
       </div>
 
-      {/* CATEGORY */}
-      <div className="flex gap-8 mb-10 text-gray-400 text-[18px]">
-        {categories.map((cat) => (
+      <div className="mb-10 flex flex-wrap gap-4 text-[18px] text-gray-400 md:gap-8">
+        {categories.map((category) => (
           <button
-            key={cat}
-            onClick={() => setActiveCategory(cat)}
+            key={category}
+            onClick={() => setActiveCategory(category)}
             className={`transition ${
-              activeCategory === cat
-                ? "text-black font-medium"
+              activeCategory === category
+                ? "font-medium text-black"
                 : "hover:text-black"
             }`}
           >
-            {cat}
+            {category}
           </button>
         ))}
       </div>
 
-      {/* GRID */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-        {filtered.map((fg) => (
-          <Link key={fg.id} href={`/findfg/${fg.slug}`}>
-            <div className="relative w-full h-[260px] rounded-sm overflow-hidden cursor-pointer hover:scale-[1.02] transition">
-              
-              {/* IMAGE */}
+      <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 md:grid-cols-4">
+        {filtered.map((partner) => (
+          <Link key={partner.userId} href={`/findfg/${partner.slug}`}>
+            <div className="relative h-[260px] w-full cursor-pointer overflow-hidden rounded-sm transition hover:scale-[1.02]">
               <Image
-                src={fg.image}
-                alt={fg.name}
+                src={partner.imageUrl}
+                alt={partner.brandName}
                 fill
                 className="object-cover"
               />
 
-              {/* OVERLAY TEXT */}
-              <div className="absolute bottom-0 left-0 right-0 p-3 bg-black/20">
-                <p className="text-white text-[18px] md:text-[20px] font-normal">
-                  {fg.name}
+              <div className="absolute bottom-0 left-0 right-0 bg-black/20 p-3">
+                <p className="text-[18px] font-normal text-white md:text-[20px]">
+                  {partner.brandName}
+                </p>
+                <p className="text-xs uppercase tracking-[0.18em] text-white/75">
+                  {partner.category}
                 </p>
               </div>
-
             </div>
           </Link>
         ))}
       </div>
+
+      {filtered.length === 0 && (
+        <div className="py-20 text-center text-black/40">
+          Belum ada partner yang tampil di kategori ini.
+        </div>
+      )}
     </section>
   );
 }

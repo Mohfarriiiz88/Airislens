@@ -1,127 +1,253 @@
-'use client'
+"use client";
 
-import { useEffect, useState } from 'react'
-import Image from 'next/image'
+import Image from "next/image";
+import { useEffect, useState } from "react";
 
 type GalleryItem = {
-  id: string
-  title: string
-  category: string
-  imageUrl: string
-}
+  id: number;
+  title: string;
+  category: string;
+  imageUrl: string;
+};
+
+type GalleryForm = {
+  title: string;
+  category: string;
+  imageUrl: string;
+};
+
+const EMPTY_FORM: GalleryForm = {
+  title: "",
+  category: "",
+  imageUrl: "",
+};
 
 export default function AdminGaleriPage() {
-  const [items, setItems] = useState<GalleryItem[]>([
-    {
-      id: 'GL-001',
-      title: 'Portrait Session',
-      category: 'Portrait',
-      imageUrl: '/images/heroPotrait.JPG',
-    },
-    {
-      id: 'GL-002',
-      title: 'Couple Session',
-      category: 'Couple',
-      imageUrl: '/images/heroCouple.JPG',
-    },
-  ])
+  const [items, setItems] = useState<GalleryItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [isError, setIsError] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState<GalleryItem | null>(null);
+  const [form, setForm] = useState<GalleryForm>(EMPTY_FORM);
+  const [file, setFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState("");
 
-  const [open, setOpen] = useState(false)
-  const [active, setActive] = useState<GalleryItem | null>(null)
+  async function loadItems() {
+    setIsLoading(true);
 
-  const [form, setForm] = useState({
-    title: '',
-    category: '',
-    imageUrl: '',
-  })
+    try {
+      const response = await fetch("/api/admin/gallery", {
+        cache: "no-store",
+      });
+      const data = (await response.json()) as {
+        message?: string;
+        items?: GalleryItem[];
+      };
 
-  // 🔥 NEW STATE FILE
-  const [file, setFile] = useState<File | null>(null)
+      if (!response.ok) {
+        setItems([]);
+        setIsError(true);
+        setMessage(data.message ?? "Gagal memuat galeri.");
+        return;
+      }
 
-  const openCreate = () => {
-    setForm({ title: '', category: '', imageUrl: '' })
-    setFile(null)
-    setActive(null)
-    setOpen(true)
+      setItems(data.items ?? []);
+      setIsError(false);
+      setMessage("");
+    } catch {
+      setItems([]);
+      setIsError(true);
+      setMessage("Tidak dapat terhubung ke server.");
+    } finally {
+      setIsLoading(false);
+    }
   }
 
-  const openDetail = (item: GalleryItem) => {
-    setActive(item)
+  useEffect(() => {
+    loadItems();
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
+
+  function openCreate() {
+    setActive(null);
+    setForm(EMPTY_FORM);
+    setFile(null);
+    setPreviewUrl("");
+    setOpen(true);
+  }
+
+  function openDetail(item: GalleryItem) {
+    setActive(item);
     setForm({
       title: item.title,
       category: item.category,
       imageUrl: item.imageUrl,
-    })
-    setFile(null)
-    setOpen(true)
+    });
+    setFile(null);
+    setPreviewUrl("");
+    setOpen(true);
   }
 
-  // 🔥 HANDLE FILE UPLOAD
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const selected = e.target.files?.[0]
+  function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const selected = event.target.files?.[0];
 
-    if (selected) {
-      setFile(selected)
-
-      const previewUrl = URL.createObjectURL(selected)
-
-      setForm((prev) => ({
-        ...prev,
-        imageUrl: previewUrl,
-      }))
+    if (!selected) {
+      return;
     }
+
+    if (previewUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(previewUrl);
+    }
+
+    setFile(selected);
+    setPreviewUrl(URL.createObjectURL(selected));
   }
 
-  // 🔥 CLEANUP MEMORY (IMPORTANT)
-  useEffect(() => {
-    return () => {
-      if (form.imageUrl?.startsWith('blob:')) {
-        URL.revokeObjectURL(form.imageUrl)
-      }
-    }
-  }, [form.imageUrl])
-
-  const submit = () => {
-    if (!form.title || !file) {
-      alert('Judul dan gambar wajib diisi')
-      return
+  async function uploadImageIfNeeded() {
+    if (!file) {
+      return form.imageUrl;
     }
 
-    if (active) {
-      setItems((prev) =>
-        prev.map((i) =>
-          i.id === active.id ? { ...i, ...form } : i
-        )
-      )
-    } else {
-      setItems((prev) => [
-        ...prev,
-        {
-          id: `GL-${Date.now()}`,
-          ...form,
+    const uploadBody = new FormData();
+    uploadBody.append("kind", "gallery");
+    uploadBody.append("file", file);
+
+    const response = await fetch("/api/admin/uploads", {
+      method: "POST",
+      body: uploadBody,
+    });
+    const data = (await response.json()) as {
+      message?: string;
+      url?: string;
+    };
+
+    if (!response.ok || !data.url) {
+      throw new Error(data.message ?? "Gagal mengunggah foto galeri.");
+    }
+
+    return data.url;
+  }
+
+  async function submit() {
+    if (!form.title || !form.category || (!form.imageUrl && !file)) {
+      setIsError(true);
+      setMessage("Judul, kategori, dan gambar wajib diisi.");
+      return;
+    }
+
+    setIsSaving(true);
+    setIsError(false);
+    setMessage("");
+
+    try {
+      const imageUrl = await uploadImageIfNeeded();
+      const endpoint = active
+        ? `/api/admin/gallery/${active.id}`
+        : "/api/admin/gallery";
+      const method = active ? "PATCH" : "POST";
+      const response = await fetch(endpoint, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
         },
-      ])
+        body: JSON.stringify({
+          title: form.title,
+          category: form.category,
+          imageUrl,
+        }),
+      });
+      const data = (await response.json()) as {
+        message?: string;
+        item?: GalleryItem;
+      };
+
+      if (!response.ok) {
+        setIsError(true);
+        setMessage(data.message ?? "Gagal menyimpan galeri.");
+        return;
+      }
+
+      if (active) {
+        setItems((prev) =>
+          prev.map((item) =>
+            item.id === active.id
+              ? {
+                  id: active.id,
+                  title: form.title,
+                  category: form.category,
+                  imageUrl,
+                }
+              : item
+          )
+        );
+      } else if (data.item) {
+        setItems((prev) => [data.item as GalleryItem, ...prev]);
+      }
+
+      setOpen(false);
+      setActive(null);
+      setForm(EMPTY_FORM);
+      setFile(null);
+      setPreviewUrl("");
+      setIsError(false);
+      setMessage(data.message ?? "Galeri berhasil disimpan.");
+    } catch (error) {
+      setIsError(true);
+      setMessage(
+        error instanceof Error ? error.message : "Tidak dapat terhubung ke server."
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function remove(id: number) {
+    if (!confirm("Hapus foto ini dari galeri?")) {
+      return;
     }
 
-    setOpen(false)
+    try {
+      const response = await fetch(`/api/admin/gallery/${id}`, {
+        method: "DELETE",
+      });
+      const data = (await response.json()) as {
+        message?: string;
+      };
+
+      if (!response.ok) {
+        setIsError(true);
+        setMessage(data.message ?? "Gagal menghapus foto galeri.");
+        return;
+      }
+
+      setItems((prev) => prev.filter((item) => item.id !== id));
+      setOpen(false);
+      setIsError(false);
+      setMessage(data.message ?? "Foto galeri berhasil dihapus.");
+    } catch {
+      setIsError(true);
+      setMessage("Tidak dapat terhubung ke server.");
+    }
   }
 
-  const remove = (id: string) => {
-    if (!confirm('Hapus foto ini dari galeri?')) return
-    setItems((prev) => prev.filter((i) => i.id !== id))
-    setOpen(false)
-  }
+  const resolvedPreview = previewUrl || form.imageUrl;
 
   return (
     <div className="space-y-8">
-      {/* ===== HEADER ===== */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-[40px] font-normal text-black">
-            Galeri Foto
-          </h1>
+          <h1 className="text-[40px] font-normal text-black">Galeri Foto</h1>
           <p className="text-lg font-normal text-black">
-            Kelola foto yang tampil di website Beranjak Photo
+            Kelola foto yang tampil di website partner Anda.
           </p>
         </div>
 
@@ -133,77 +259,84 @@ export default function AdminGaleriPage() {
         </button>
       </div>
 
-      {/* ===== GRID ===== */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-        {items.map((item) => (
-          <div
-            key={item.id}
-            className="group relative overflow-hidden rounded-2xl border border-white/10 bg-[#111111]"
-          >
-            <div className="relative h-56 w-full">
-              <Image
-                src={item.imageUrl}
-                alt={item.title}
-                fill
-                className="object-cover"
-              />
+      {message && (
+        <div
+          className={`rounded-xl border px-4 py-3 text-sm ${
+            isError
+              ? "border-red-500/20 bg-red-500/10 text-red-600"
+              : "border-green-500/20 bg-green-500/10 text-green-700"
+          }`}
+        >
+          {message}
+        </div>
+      )}
+
+      {isLoading ? (
+        <div className="py-20 text-center text-black/40">Memuat galeri partner...</div>
+      ) : (
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3">
+          {items.map((item) => (
+            <div
+              key={item.id}
+              className="group relative overflow-hidden rounded-2xl border border-white/10 bg-[#111111]"
+            >
+              <div className="relative h-56 w-full">
+                <Image
+                  src={item.imageUrl}
+                  alt={item.title}
+                  fill
+                  className="object-cover"
+                />
+              </div>
+
+              <div className="p-4">
+                <p className="text-sm font-medium text-white">{item.title}</p>
+                <p className="text-xs text-white/60">{item.category}</p>
+
+                <button
+                  onClick={() => openDetail(item)}
+                  className="mt-3 rounded-lg border border-black/20 px-3 py-1 text-xs transition hover:bg-black/10"
+                >
+                  Detail
+                </button>
+              </div>
             </div>
+          ))}
 
-            <div className="p-4">
-              <p className="text-sm font-medium text-white">
-                {item.title}
-              </p>
-              <p className="text-xs text-white/60">
-                {item.category}
-              </p>
-
-              <button
-                onClick={() => openDetail(item)}
-                className="mt-3 rounded-lg border border-black/20 px-3 py-1 text-xs hover:bg-black/10 transition"
-              >
-                Detail
-              </button>
+          {items.length === 0 && (
+            <div className="col-span-full text-center text-black/50">
+              Belum ada foto di galeri.
             </div>
-          </div>
-        ))}
+          )}
+        </div>
+      )}
 
-        {items.length === 0 && (
-          <div className="col-span-full text-center text-black/50">
-            Belum ada foto di galeri
-          </div>
-        )}
-      </div>
-
-      {/* ===== MODAL ===== */}
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 border border-black/20">
-            <h2 className="text-2xl text-black mb-4">
-              {active ? 'Detail Foto' : 'Tambah Foto'}
+          <div className="w-full max-w-md rounded-2xl border border-black/20 bg-white p-6">
+            <h2 className="mb-4 text-2xl text-black">
+              {active ? "Detail Foto" : "Tambah Foto"}
             </h2>
 
             <div className="space-y-4">
-              {/* TITLE */}
               <input
                 placeholder="Judul Foto"
                 value={form.title}
-                onChange={(e) =>
-                  setForm({ ...form, title: e.target.value })
+                onChange={(event) =>
+                  setForm((prev) => ({ ...prev, title: event.target.value }))
                 }
                 className="w-full rounded-xl border border-black/20 bg-[#f5f5f5] px-4 py-2 text-sm text-black"
               />
 
-              {/* CATEGORY */}
               <input
                 placeholder="Kategori"
                 value={form.category}
-                onChange={(e) =>
-                  setForm({ ...form, category: e.target.value })
+                onChange={(event) =>
+                  setForm((prev) => ({ ...prev, category: event.target.value }))
                 }
                 className="w-full rounded-xl border border-black/20 bg-[#f5f5f5] px-4 py-2 text-sm text-black"
               />
 
-              {/* 🔥 FILE UPLOAD */}
               <input
                 type="file"
                 accept="image/*"
@@ -211,20 +344,13 @@ export default function AdminGaleriPage() {
                 className="w-full rounded-xl border border-black/20 bg-[#f5f5f5] px-4 py-2 text-sm"
               />
 
-              {/* PREVIEW */}
-              {form.imageUrl && (
-                <div className="relative h-40 w-full rounded-xl overflow-hidden border border-black/20">
-                  <Image
-                    src={form.imageUrl}
-                    alt="Preview"
-                    fill
-                    className="object-cover"
-                  />
+              {resolvedPreview && (
+                <div className="relative h-40 w-full overflow-hidden rounded-xl border border-black/20">
+                  <Image src={resolvedPreview} alt="Preview" fill className="object-cover" />
                 </div>
               )}
             </div>
 
-            {/* ACTION */}
             <div className="mt-6 flex justify-between">
               {active && (
                 <button
@@ -245,9 +371,10 @@ export default function AdminGaleriPage() {
 
                 <button
                   onClick={submit}
-                  className="rounded-lg bg-black px-6 py-2 text-sm text-white hover:opacity-90"
+                  disabled={isSaving}
+                  className="rounded-lg bg-black px-6 py-2 text-sm text-white hover:opacity-90 disabled:opacity-70"
                 >
-                  Simpan
+                  {isSaving ? "Menyimpan..." : "Simpan"}
                 </button>
               </div>
             </div>
@@ -255,5 +382,5 @@ export default function AdminGaleriPage() {
         </div>
       )}
     </div>
-  )
+  );
 }

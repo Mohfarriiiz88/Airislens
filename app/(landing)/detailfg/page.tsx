@@ -1,13 +1,5 @@
-
-import DetailFg from "@/components/landingpage/findfg/Detailfg";
-
-import Navbar from "@/components/ui/navbar/Navbar";
+import { redirect } from "next/navigation";
 
 export default function FindFgPage() {
-  return (
-    <>
-      <Navbar />
-      <DetailFg />
-    </>
-  );
+  redirect("/findfg");
 }

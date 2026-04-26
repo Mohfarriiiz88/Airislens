@@ -1,163 +1,412 @@
-'use client'
+"use client";
 
-import { useState } from 'react'
+import Image from "next/image";
+import { useEffect, useMemo, useState } from "react";
 
-type Profile = {
-  name: string
-  description: string
-  specializations: string[]
-  location: string
-  phone: string
-  instagram: string
-}
+type ProfileForm = {
+  accountEmail: string;
+  brandName: string;
+  slug: string;
+  description: string;
+  specializations: string[];
+  address: string;
+  whatsapp: string;
+  instagram: string;
+  tiktok: string;
+  facebook: string;
+  website: string;
+  profilePhotoUrl: string;
+};
 
 const SPECIALIZATION_OPTIONS = [
-  'Prewedding & Wedding',
-  'Portrait & Personal Branding',
-  'Event Documentation',
-  'Fashion & Editorial',
-]
+  "Prewedding & Wedding",
+  "Portrait & Personal Branding",
+  "Event Documentation",
+  "Fashion & Editorial",
+  "Graduation",
+  "Product",
+];
+
+const EMPTY_FORM: ProfileForm = {
+  accountEmail: "",
+  brandName: "",
+  slug: "",
+  description: "",
+  specializations: [],
+  address: "",
+  whatsapp: "",
+  instagram: "",
+  tiktok: "",
+  facebook: "",
+  website: "",
+  profilePhotoUrl: "",
+};
 
 export default function ProfilePage() {
-  const [profile, setProfile] = useState<Profile>({
-    name: 'Beranjak Photo',
-    description:
-      'Beranjak Photo is a professional photography team specializing in capturing moments...',
-    specializations: ['Prewedding & Wedding'],
-    location: 'Tegal',
-    phone: '081234567890',
-    instagram: '@beranjakphoto',
-  })
+  const [form, setForm] = useState<ProfileForm>(EMPTY_FORM);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [isError, setIsError] = useState(false);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState("");
 
-  function handleChange(field: keyof Profile, value: any) {
-    setProfile((prev) => ({
+  async function loadProfile() {
+    setIsLoading(true);
+
+    try {
+      const response = await fetch("/api/admin/profile", {
+        cache: "no-store",
+      });
+      const data = (await response.json()) as {
+        message?: string;
+        profile?: ProfileForm;
+      };
+
+      if (!response.ok) {
+        setIsError(true);
+        setMessage(data.message ?? "Gagal memuat profil partner.");
+        return;
+      }
+
+      setForm(data.profile ?? EMPTY_FORM);
+      setIsError(false);
+      setMessage("");
+    } catch {
+      setIsError(true);
+      setMessage("Tidak dapat terhubung ke server.");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadProfile();
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (photoPreviewUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(photoPreviewUrl);
+      }
+    };
+  }, [photoPreviewUrl]);
+
+  function handleChange(field: keyof ProfileForm, value: string | string[]) {
+    setForm((prev) => ({
       ...prev,
       [field]: value,
-    }))
+    }));
   }
 
   function handleCheckbox(value: string) {
-    setProfile((prev) => {
-      const exists = prev.specializations.includes(value)
+    setForm((prev) => {
+      const exists = prev.specializations.includes(value);
 
       return {
         ...prev,
         specializations: exists
-          ? prev.specializations.filter((s) => s !== value)
+          ? prev.specializations.filter((item) => item !== value)
           : [...prev.specializations, value],
+      };
+    });
+  }
+
+  function handlePhotoChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const selected = event.target.files?.[0];
+
+    if (!selected) {
+      return;
+    }
+
+    if (photoPreviewUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(photoPreviewUrl);
+    }
+
+    setPhotoFile(selected);
+    setPhotoPreviewUrl(URL.createObjectURL(selected));
+  }
+
+  async function uploadPhotoIfNeeded() {
+    if (!photoFile) {
+      return form.profilePhotoUrl;
+    }
+
+    const uploadBody = new FormData();
+    uploadBody.append("kind", "profile");
+    uploadBody.append("file", photoFile);
+
+    const response = await fetch("/api/admin/uploads", {
+      method: "POST",
+      body: uploadBody,
+    });
+    const data = (await response.json()) as {
+      message?: string;
+      url?: string;
+    };
+
+    if (!response.ok || !data.url) {
+      throw new Error(data.message ?? "Gagal mengunggah photo profile.");
+    }
+
+    return data.url;
+  }
+
+  async function handleSubmit() {
+    setIsSaving(true);
+    setIsError(false);
+    setMessage("");
+
+    try {
+      const profilePhotoUrl = await uploadPhotoIfNeeded();
+      const response = await fetch("/api/admin/profile", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          brandName: form.brandName,
+          description: form.description,
+          specializations: form.specializations,
+          address: form.address,
+          whatsapp: form.whatsapp,
+          instagram: form.instagram,
+          tiktok: form.tiktok,
+          facebook: form.facebook,
+          website: form.website,
+          profilePhotoUrl,
+        }),
+      });
+      const data = (await response.json()) as {
+        message?: string;
+        profile?: ProfileForm;
+      };
+
+      if (!response.ok) {
+        setIsError(true);
+        setMessage(data.message ?? "Gagal menyimpan profil partner.");
+        return;
       }
-    })
+
+      setForm(data.profile ?? { ...form, profilePhotoUrl });
+      setPhotoFile(null);
+      setPhotoPreviewUrl("");
+      setIsError(false);
+      setMessage(data.message ?? "Profil partner berhasil disimpan.");
+    } catch (error) {
+      setIsError(true);
+      setMessage(
+        error instanceof Error ? error.message : "Tidak dapat terhubung ke server."
+      );
+    } finally {
+      setIsSaving(false);
+    }
   }
 
-  function handleSubmit() {
-    console.log('SAVE PROFILE:', profile)
-
-    alert('Profile berhasil disimpan')
-
-    // 🔥 nanti kirim ke backend
-    // await fetch('/api/profile', { method: 'POST', body: JSON.stringify(profile) })
-  }
+  const previewImage = useMemo(() => {
+    return photoPreviewUrl || form.profilePhotoUrl || "/svg/fg1.svg";
+  }, [form.profilePhotoUrl, photoPreviewUrl]);
 
   return (
-    <div className="space-y-8 max-w-2xl">
-
-      {/* ===== HEADER ===== */}
+    <div className="space-y-8">
       <div>
-        <h1 className="text-[40px] text-black">
-          Profile Settings
-        </h1>
+        <h1 className="text-[40px] text-black">Profile Settings</h1>
         <p className="text-lg text-black">
-          Atur informasi profil fotografer
+          Lengkapi profil partner agar otomatis tampil di halaman FindFG.
         </p>
       </div>
 
-      {/* ===== FORM ===== */}
-      <div className="space-y-6">
-
-        {/* NAME */}
-        <div>
-          <label className="text-sm text-black">Nama Brand</label>
-          <input
-            value={profile.name}
-            onChange={(e) => handleChange('name', e.target.value)}
-            className="w-full mt-1 rounded-xl border border-black/20 px-4 py-2 text-sm"
-          />
+      {message && (
+        <div
+          className={`rounded-xl border px-4 py-3 text-sm ${
+            isError
+              ? "border-red-500/20 bg-red-500/10 text-red-600"
+              : "border-green-500/20 bg-green-500/10 text-green-700"
+          }`}
+        >
+          {message}
         </div>
+      )}
 
-        {/* DESCRIPTION */}
-        <div>
-          <label className="text-sm text-black">Deskripsi</label>
-          <textarea
-            rows={4}
-            value={profile.description}
-            onChange={(e) =>
-              handleChange('description', e.target.value)
-            }
-            className="w-full mt-1 rounded-xl border border-black/20 px-4 py-2 text-sm"
-          />
-        </div>
-
-        {/* SPECIALIZATION */}
-        <div>
-          <label className="text-sm text-black">
-            Specializations
-          </label>
-
-          <div className="mt-2 space-y-2">
-            {SPECIALIZATION_OPTIONS.map((item) => (
-              <label
-                key={item}
-                className="flex items-center gap-2 text-sm"
-              >
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="space-y-6 rounded-[28px] border border-black/10 bg-white p-6">
+          {isLoading ? (
+            <div className="py-20 text-center text-black/40">Memuat profil partner...</div>
+          ) : (
+            <>
+              <div>
+                <label className="text-sm text-black">Nama Brand</label>
                 <input
-                  type="checkbox"
-                  checked={profile.specializations.includes(item)}
-                  onChange={() => handleCheckbox(item)}
+                  value={form.brandName}
+                  onChange={(event) => handleChange("brandName", event.target.value)}
+                  className="mt-1 w-full rounded-xl border border-black/20 px-4 py-3 text-sm"
                 />
-                {item}
-              </label>
-            ))}
+              </div>
+
+              <div>
+                <label className="text-sm text-black">Deskripsi</label>
+                <textarea
+                  rows={5}
+                  value={form.description}
+                  onChange={(event) => handleChange("description", event.target.value)}
+                  className="mt-1 w-full rounded-xl border border-black/20 px-4 py-3 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm text-black">Spesialisasi</label>
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  {SPECIALIZATION_OPTIONS.map((item) => (
+                    <label
+                      key={item}
+                      className="flex items-center gap-3 rounded-xl border border-black/10 px-4 py-3 text-sm"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={form.specializations.includes(item)}
+                        onChange={() => handleCheckbox(item)}
+                      />
+                      {item}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm text-black">Alamat</label>
+                <textarea
+                  rows={3}
+                  value={form.address}
+                  onChange={(event) => handleChange("address", event.target.value)}
+                  className="mt-1 w-full rounded-xl border border-black/20 px-4 py-3 text-sm"
+                />
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="text-sm text-black">No. WhatsApp</label>
+                  <input
+                    value={form.whatsapp}
+                    onChange={(event) => handleChange("whatsapp", event.target.value)}
+                    className="mt-1 w-full rounded-xl border border-black/20 px-4 py-3 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm text-black">Instagram</label>
+                  <input
+                    value={form.instagram}
+                    onChange={(event) => handleChange("instagram", event.target.value)}
+                    className="mt-1 w-full rounded-xl border border-black/20 px-4 py-3 text-sm"
+                    placeholder="@namabrand"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm text-black">TikTok</label>
+                  <input
+                    value={form.tiktok}
+                    onChange={(event) => handleChange("tiktok", event.target.value)}
+                    className="mt-1 w-full rounded-xl border border-black/20 px-4 py-3 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm text-black">Facebook</label>
+                  <input
+                    value={form.facebook}
+                    onChange={(event) => handleChange("facebook", event.target.value)}
+                    className="mt-1 w-full rounded-xl border border-black/20 px-4 py-3 text-sm"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="text-sm text-black">Website</label>
+                  <input
+                    value={form.website}
+                    onChange={(event) => handleChange("website", event.target.value)}
+                    className="mt-1 w-full rounded-xl border border-black/20 px-4 py-3 text-sm"
+                    placeholder="https://"
+                  />
+                </div>
+              </div>
+
+              <button
+                onClick={handleSubmit}
+                disabled={isSaving}
+                className="w-full rounded-xl bg-black py-3 text-sm text-white hover:opacity-90 disabled:opacity-70"
+              >
+                {isSaving ? "Menyimpan..." : "Simpan Profile"}
+              </button>
+            </>
+          )}
+        </div>
+
+        <div className="space-y-4">
+          <div className="rounded-[28px] border border-black/10 bg-white p-5">
+            <div className="relative mb-4 h-[360px] overflow-hidden rounded-[24px] bg-[#f2f2f2]">
+              <Image
+                src={previewImage}
+                alt={form.brandName || "Partner Photo"}
+                fill
+                className="object-cover"
+              />
+            </div>
+
+            <label className="block">
+              <span className="mb-2 block text-sm text-black">Photo Profile</span>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handlePhotoChange}
+                className="w-full rounded-xl border border-black/20 px-4 py-3 text-sm"
+              />
+            </label>
+          </div>
+
+          <div className="rounded-[28px] border border-black/10 bg-white p-5">
+            <p className="text-xs uppercase tracking-[0.18em] text-black/40">Preview</p>
+            <h2 className="mt-3 text-2xl text-black">
+              {form.brandName || "Nama brand partner"}
+            </h2>
+            <p className="mt-2 text-sm text-black/60">
+              {form.accountEmail || "email-partner@airislens.com"}
+            </p>
+
+            <div className="mt-5 flex flex-wrap gap-2">
+              {form.specializations.length > 0 ? (
+                form.specializations.map((item) => (
+                  <span
+                    key={item}
+                    className="rounded-full bg-black/5 px-3 py-1 text-xs text-black"
+                  >
+                    {item}
+                  </span>
+                ))
+              ) : (
+                <span className="text-sm text-black/40">
+                  Belum ada spesialisasi dipilih.
+                </span>
+              )}
+            </div>
+
+            <div className="mt-6 space-y-4 text-sm text-black/70">
+              <div>
+                <p className="text-black/40">Public URL</p>
+                <p>{form.slug ? `/findfg/${form.slug}` : "Slug akan dibuat otomatis."}</p>
+              </div>
+              <div>
+                <p className="text-black/40">WhatsApp</p>
+                <p>{form.whatsapp || "Belum diisi"}</p>
+              </div>
+              <div>
+                <p className="text-black/40">Alamat</p>
+                <p>{form.address || "Belum diisi"}</p>
+              </div>
+            </div>
           </div>
         </div>
-
-        {/* LOCATION */}
-        <div>
-          <label className="text-sm text-black">Alamat</label>
-          <input
-            value={profile.location}
-            onChange={(e) => handleChange('location', e.target.value)}
-            className="w-full mt-1 rounded-xl border border-black/20 px-4 py-2 text-sm"
-          />
-        </div>
-
-        {/* PHONE */}
-        <div>
-          <label className="text-sm text-black">No. WhatsApp</label>
-          <input
-            value={profile.phone}
-            onChange={(e) => handleChange('phone', e.target.value)}
-            className="w-full mt-1 rounded-xl border border-black/20 px-4 py-2 text-sm"
-          />
-        </div>
-
-        {/* INSTAGRAM */}
-        <div>
-          <label className="text-sm text-black">Instagram</label>
-          <input
-            value={profile.instagram}
-            onChange={(e) => handleChange('instagram', e.target.value)}
-            className="w-full mt-1 rounded-xl border border-black/20 px-4 py-2 text-sm"
-          />
-        </div>
-
-        {/* BUTTON */}
-        <button
-          onClick={handleSubmit}
-          className="w-full bg-black text-white py-3 rounded-xl text-sm hover:opacity-90"
-        >
-          Simpan Profile
-        </button>
       </div>
     </div>
-  )
+  );
 }
