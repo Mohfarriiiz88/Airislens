@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 const navItems = [
   { name: "Home", href: "/" },
   { name: "FindFG", href: "/findfg" },
-  { name: "Gallery", href: "/profile  " },
+  { name: "Gallery", href: "/gallery" },
   { name: "Partner", href: "/partner" },
 ];
 
@@ -59,7 +59,7 @@ export default function Navbar() {
     return () => {
       window.removeEventListener("scroll", updateScrollState);
     };
-  }, []);
+  }, [pathname]);
 
   // ================= 🔥 SCROLL LOCK =================
   useEffect(() => {
@@ -152,6 +152,19 @@ export default function Navbar() {
       window.removeEventListener("resize", requestUpdate);
     };
   }, [pathname]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setIsMenuOpen(false);
+      setIsScrolled(window.scrollY > 12);
+    };
+
+    window.addEventListener("popstate", handlePopState);
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;

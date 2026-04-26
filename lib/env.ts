@@ -21,3 +21,7 @@ export function getDatabaseConfig() {
 export function getJwtSecret() {
   return getRequiredEnv("JWT_SECRET");
 }
+
+export function getOptionalSuperadminEmail() {
+  return process.env.SUPERADMIN_EMAIL?.trim().toLowerCase() || null;
+}

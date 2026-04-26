@@ -9,8 +9,9 @@ export async function proxy(request: NextRequest) {
   const session = token ? await verifyJwt(token) : null;
   const isLoginRoute = pathname === "/login";
   const isAdminRoute = pathname.startsWith("/admin");
+  const isSuperadminRoute = pathname.startsWith("/superadmin");
 
-  if (isAdminRoute && !session) {
+  if ((isAdminRoute || isSuperadminRoute) && !session) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("next", `${pathname}${search}`);
 
@@ -21,8 +22,17 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/", request.url));
   }
 
+  if (isSuperadminRoute && session?.role !== "superadmin") {
+    return NextResponse.redirect(new URL("/", request.url));
+  }
+
   if (isLoginRoute && session) {
-    const redirectUrl = session.role === "admin" ? "/admin/dashboard" : "/";
+    const redirectUrl =
+      session.role === "superadmin"
+        ? "/superadmin/dashboard"
+        : session.role === "admin"
+          ? "/admin/dashboard"
+          : "/";
 
     return NextResponse.redirect(new URL(redirectUrl, request.url));
   }
@@ -31,5 +41,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/login", "/admin/:path*"],
+  matcher: ["/login", "/admin/:path*", "/superadmin/:path*"],
 };

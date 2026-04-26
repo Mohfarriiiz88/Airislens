@@ -2,7 +2,7 @@ import { type ResultSetHeader, type RowDataPacket } from "mysql2/promise";
 
 import { getDbPool } from "@/lib/db";
 
-export type UserRole = "admin" | "user";
+export type UserRole = "superadmin" | "admin" | "user";
 
 export type UserRecord = RowDataPacket & {
   id: number;
@@ -10,6 +10,8 @@ export type UserRecord = RowDataPacket & {
   email: string;
   password_hash: string;
   role: UserRole;
+  created_at: Date;
+  updated_at: Date;
 };
 
 export type SafeUser = {
@@ -17,6 +19,22 @@ export type SafeUser = {
   name: string;
   email: string;
   role: UserRole;
+};
+
+export type SuperadminUserRecord = RowDataPacket & {
+  id: number;
+  name: string;
+  email: string;
+  role: UserRole;
+  created_at: Date;
+};
+
+export type SuperadminUser = {
+  id: number;
+  name: string;
+  email: string;
+  role: UserRole;
+  createdAt: string;
 };
 
 export function toSafeUser(
@@ -45,6 +63,21 @@ export async function findUserByEmail(email: string) {
   return rows[0] ?? null;
 }
 
+export async function findUserById(id: number) {
+  const pool = getDbPool();
+  const [rows] = await pool.execute<UserRecord[]>(
+    `
+      SELECT id, name, email, password_hash, role, created_at, updated_at
+      FROM users
+      WHERE id = ?
+      LIMIT 1
+    `,
+    [id]
+  );
+
+  return rows[0] ?? null;
+}
+
 export async function countUsers() {
   const pool = getDbPool();
   const [rows] = await pool.execute<(RowDataPacket & { total: number })[]>(
@@ -52,6 +85,34 @@ export async function countUsers() {
   );
 
   return rows[0]?.total ?? 0;
+}
+
+export async function listUsersForSuperadmin() {
+  const pool = getDbPool();
+  const [rows] = await pool.execute<SuperadminUserRecord[]>(
+    `
+      SELECT id, name, email, role, created_at
+      FROM users
+      ORDER BY
+        CASE role
+          WHEN 'superadmin' THEN 0
+          WHEN 'admin' THEN 1
+          ELSE 2
+        END,
+        created_at DESC
+    `
+  );
+
+  return rows.map((user) => ({
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    createdAt:
+      user.created_at instanceof Date
+        ? user.created_at.toISOString()
+        : new Date(user.created_at).toISOString(),
+  }));
 }
 
 export async function createUser(input: {
@@ -75,4 +136,20 @@ export async function createUser(input: {
     email: input.email,
     role: input.role,
   };
+}
+
+export async function updateUserRole(input: {
+  id: number;
+  role: Exclude<UserRole, "superadmin">;
+}) {
+  const pool = getDbPool();
+  await pool.execute(
+    `
+      UPDATE users
+      SET role = ?
+      WHERE id = ?
+      LIMIT 1
+    `,
+    [input.role, input.id]
+  );
 }

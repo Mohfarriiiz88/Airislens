@@ -26,7 +26,6 @@ export default function Gallery() {
     >
       {/* ================= HEADER ================= */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-16 mt-10">
-        
         <h1 className="text-black text-[24px] md:text-[40px] font-normal leading-tight">
           Explore Our <br /> Gallery
         </h1>

@@ -3,9 +3,13 @@ CREATE TABLE IF NOT EXISTS users (
   name VARCHAR(100) NOT NULL,
   email VARCHAR(191) NOT NULL,
   password_hash TEXT NOT NULL,
-  role ENUM('admin', 'user') NOT NULL DEFAULT 'user',
+  role ENUM('superadmin', 'admin', 'user') NOT NULL DEFAULT 'user',
+  superadmin_slot TINYINT GENERATED ALWAYS AS (
+    CASE WHEN role = 'superadmin' THEN 1 ELSE NULL END
+  ) STORED,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
-  UNIQUE KEY users_email_unique (email)
+  UNIQUE KEY users_email_unique (email),
+  UNIQUE KEY users_superadmin_singleton (superadmin_slot)
 );

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { hashPassword, validatePassword } from "@/lib/auth/password";
+import { getOptionalSuperadminEmail } from "@/lib/env";
 import {
   AUTH_COOKIE_NAME,
   createSessionToken,
@@ -28,11 +29,22 @@ export async function POST(request: Request) {
     }
 
     const existingUser = await findUserByEmail(email);
+    const reservedSuperadminEmail = getOptionalSuperadminEmail();
 
     if (existingUser) {
       return NextResponse.json(
         { message: "Email sudah terdaftar." },
         { status: 409 }
+      );
+    }
+
+    if (reservedSuperadminEmail && email === reservedSuperadminEmail) {
+      return NextResponse.json(
+        {
+          message:
+            "Email ini dicadangkan untuk akun superadmin dan tidak bisa dibuat dari register publik.",
+        },
+        { status: 403 }
       );
     }
 

@@ -1,10 +1,11 @@
+import { type UserRole } from "@/lib/auth/users";
 import { getJwtSecret } from "@/lib/env";
 
 export type JwtPayload = {
   sub: string;
   name: string;
   email: string;
-  role: string;
+  role: UserRole;
   iat: number;
   exp: number;
 };

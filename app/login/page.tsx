@@ -28,6 +28,20 @@ export default function LoginPage() {
 
   const nextPath = searchParams.get("next") || "/admin/dashboard";
 
+  function getRedirectPath(role?: string) {
+    if (role === "superadmin") {
+      return nextPath.startsWith("/superadmin")
+        ? nextPath
+        : "/superadmin/dashboard";
+    }
+
+    if (role === "admin") {
+      return nextPath.startsWith("/admin") ? nextPath : "/admin/dashboard";
+    }
+
+    return "/";
+  }
+
   async function handleSubmit() {
     setIsPending(true);
     setMessage("");
@@ -65,12 +79,7 @@ export default function LoginPage() {
             ? "Login berhasil."
             : "Akun berhasil dibuat.")
       );
-      const redirectPath =
-        data.user?.role === "admin"
-          ? nextPath.startsWith("/admin")
-            ? nextPath
-            : "/admin/dashboard"
-          : "/";
+      const redirectPath = getRedirectPath(data.user?.role);
 
       router.push(redirectPath);
       router.refresh();
@@ -205,7 +214,8 @@ export default function LoginPage() {
             {activeTab === "register" && (
               <p className="text-xs text-gray-500">
                 Register membuat akun dengan role default user. Role admin hanya
-                bisa diberikan oleh superadmin.
+                bisa diberikan oleh superadmin. Akun superadmin dibuat lewat
+                seed server, bukan dari form register ini.
               </p>
             )}
 

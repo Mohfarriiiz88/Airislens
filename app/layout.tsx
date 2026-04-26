@@ -30,6 +30,10 @@ export const metadata: Metadata = {
   title: "AirisLens - Find Your Perfect Photographer",
   description:
     "AirisLens helps you find the perfect photographer using AI-powered recommendations. Capture your moments with the best.",
+
+  icons: {
+    icon: "/svg/logogram.svg",
+  },
 };
 
 /* === ROOT LAYOUT === */
