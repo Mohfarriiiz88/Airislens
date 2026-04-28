@@ -9,7 +9,7 @@ const navItems = [
   { name: "Home", href: "/" },
   { name: "FindFG", href: "/findfg" },
   { name: "Gallery", href: "/gallery" },
-  { name: "Partner", href: "/partner" },
+  { name: "History", href: "/bookinghistory" },
 ];
 
 type NavbarTone = "light" | "dark";

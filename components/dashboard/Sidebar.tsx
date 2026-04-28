@@ -98,7 +98,7 @@ export default function Sidebar() {
   <Link
     href="/"
     className={`
-      w-full flex items-center gap-3 px-3 py-3 mt-60 rounded-xl
+      w-full flex items-center gap-3 px-3 py-3 mt-40 rounded-xl
       text-[16px] text-black
       hover:bg-black hover:text-white
       transition-all

@@ -156,3 +156,19 @@ export async function updateUserProfile(input: {
     [input.name, input.email, input.phone, input.id]
   );
 }
+export async function updateUserRole(input: {
+  id: number;
+  role: Exclude<UserRole, "superadmin">;
+}) {
+  const pool = getDbPool();
+
+  await pool.execute(
+    `
+      UPDATE users
+      SET role = ?
+      WHERE id = ?
+      LIMIT 1
+    `,
+    [input.role, input.id]
+  );
+}
