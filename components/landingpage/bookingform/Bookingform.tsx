@@ -1,38 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-
-type PackageOption = {
-  value: string;
-  label: string;
-  desc: string;
-  price: string;
-  duration: string;
-};
-
-const PACKAGES: PackageOption[] = [
-  {
-    value: "portrait",
-    label: "Portrait",
-    desc: "Perfect for personal branding or graduation.",
-    price: "IDR 250000",
-    duration: "60 min",
-  },
-  {
-    value: "couple",
-    label: "Couple",
-    desc: "Prewedding or couple session.",
-    price: "IDR 350000",
-    duration: "90 min",
-  },
-  {
-    value: "event",
-    label: "Event",
-    desc: "Small event documentation.",
-    price: "IDR 450000",
-    duration: "120 min",
-  },
-];
+import { useMemo, useState, useEffect } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 
 const TIME_SLOTS = [
   "08:00",
@@ -48,19 +17,86 @@ export default function BookingForm() {
   const [form, setForm] = useState({
     name: "",
     phone: "",
-    package: "portrait",
+    package: "" as string | number,
     date: "",
     time: "",
     location: "",
     note: "",
   });
 
-  const selectedPackage = useMemo(
-    () => PACKAGES.find((p) => p.value === form.package),
-    [form.package]
-  );
+  const [packages, setPackages] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
 
-  const update = (key: keyof typeof form, value: string) => {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const fgId = searchParams.get("fg");
+
+  // ================= MOUNT CHECK =================
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // ================= FETCH PACKAGE =================
+  useEffect(() => {
+    // Wait for component to mount and searchParams to be ready
+    if (!mounted) {
+      console.log("Component not mounted yet");
+      return;
+    }
+
+    if (!fgId) {
+      console.warn("No photographer ID found in URL parameter 'fg'");
+      setLoading(false);
+      setError("No photographer selected. Please go back and select a photographer.");
+      return;
+    }
+
+    const fetchPackages = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        console.log("Fetching packages for fgId:", fgId);
+
+        const res = await fetch(`/api/packages/${fgId}`);
+        
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          throw new Error(errorData.message || `API error: ${res.status}`);
+        }
+
+        const data = await res.json();
+        console.log("Packages received:", data);
+
+        setPackages(data.packages || []);
+
+        if (data.packages?.length > 0) {
+          setForm((prev) => ({
+            ...prev,
+            package: data.packages[0].id,
+          }));
+        } else {
+          setError("No packages available for this photographer");
+        }
+      } catch (err) {
+        console.error("Error fetching packages:", err);
+        setError(err instanceof Error ? err.message : "Failed to load packages");
+        setPackages([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPackages();
+  }, [fgId, mounted]);
+
+  // ================= SELECTED PACKAGE =================
+  const selectedPackage = useMemo(() => {
+    return packages.find((p) => p.id === Number(form.package) || p.id === form.package);
+  }, [form.package, packages]);
+
+  const update = (key: keyof typeof form, value: any) => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
@@ -71,9 +107,22 @@ export default function BookingForm() {
       return;
     }
 
-    const amount = Number(
-      selectedPackage?.price.replace(/[^0-9]/g, "")
-    );
+    if (!form.date || !form.time) {
+      alert("Please select date and time");
+      return;
+    }
+
+    if (!selectedPackage) {
+      alert("Please select a package");
+      return;
+    }
+
+    const amount = Number(selectedPackage.price);
+
+    if (amount <= 0) {
+      alert("Invalid package price");
+      return;
+    }
 
     const res = await fetch("/api/payment", {
       method: "POST",
@@ -81,10 +130,21 @@ export default function BookingForm() {
         name: form.name,
         phone: form.phone,
         amount,
+        package: selectedPackage.name,
+        packageId: selectedPackage.id,
+        date: form.date,
+        time: form.time,
+        location: form.location,
+        note: form.note,
       }),
     });
 
     const data = await res.json();
+
+    if (!data.token) {
+      alert("Failed to create payment token");
+      return;
+    }
 
     // @ts-ignore
     window.snap.pay(data.token, {
@@ -122,7 +182,7 @@ export default function BookingForm() {
         {/* ================= FORM ================= */}
         <div className="space-y-6 text-[18px]">
           {/* NAME + PHONE */}
-          <div className="grid md:grid-cols-2 gap-4 text-[18px]">
+          <div className="grid md:grid-cols-2 gap-4">
             <Input
               label="Full Name"
               placeholder="Your name"
@@ -137,31 +197,52 @@ export default function BookingForm() {
             />
           </div>
 
-          {/* PACKAGE */}
+          {/* ================= PACKAGE ================= */}
           <div>
-            <p className="mb-3 text-[18px]">Select Package</p>
+            <p className="mb-3">Select Package</p>
 
-            <div className="grid md:grid-cols-3 gap-4">
-              {PACKAGES.map((p) => {
-                const active = form.package === p.value;
+            {error && (
+              <p className="text-sm text-red-500 mb-3">
+                ⚠️ {error}
+              </p>
+            )}
 
-                return (
-                  <div
-                    key={p.value}
-                    onClick={() => update("package", p.value)}
-                    className={`border p-4 rounded-md cursor-pointer transition ${
-                      active
-                        ? "bg-black text-white border-black"
-                        : "border-gray-200 hover:border-black"
-                    }`}
-                  >
-                    <p className="font-medium">{p.label}</p>
-                    <p className="text-sm mt-1">{p.duration}</p>
-                    <p className="text-sm mt-2">{p.price}</p>
-                  </div>
-                );
-              })}
-            </div>
+            {loading && (
+              <p className="text-sm text-gray-400">Loading packages...</p>
+            )}
+
+            {!loading && packages.length > 0 && (
+              <div className="grid md:grid-cols-3 gap-4">
+                {packages.map((p) => {
+                  const active = Number(form.package) === Number(p.id);
+
+                  return (
+                    <div
+                      key={p.id}
+                      onClick={() => update("package", Number(p.id))}
+                      className={`border p-4 rounded-md cursor-pointer transition ${
+                        active
+                          ? "bg-black text-white border-black"
+                          : "border-gray-200 hover:border-black"
+                      }`}
+                    >
+                      <p className="font-medium">{p.name}</p>
+                      <p className="text-sm mt-1">{p.duration}</p>
+                      <p className="text-sm mt-2">
+                        Rp {Number(p.price).toLocaleString("id-ID")}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* EMPTY STATE */}
+            {!loading && packages.length === 0 && !error && (
+              <p className="text-sm text-gray-400 mt-2">
+                No packages available for this photographer
+              </p>
+            )}
           </div>
 
           {/* DATE + TIME */}
@@ -172,6 +253,7 @@ export default function BookingForm() {
               value={form.date}
               onChange={(v) => update("date", v)}
             />
+
             <Select
               label="Time"
               options={TIME_SLOTS}
@@ -188,7 +270,7 @@ export default function BookingForm() {
             onChange={(v) => update("location", v)}
           />
 
-          {/* NOTE */}
+          {/* NOTES */}
           <Textarea
             label="Notes (optional)"
             value={form.note}
@@ -198,9 +280,14 @@ export default function BookingForm() {
           {/* BUTTON */}
           <button
             onClick={handlePayment}
-            className="bg-black text-white px-6 py-3 rounded-md text-sm"
+            disabled={loading || !selectedPackage || !fgId || !mounted}
+            className={`px-6 py-3 rounded-md text-white ${
+              loading || !selectedPackage || !fgId || !mounted
+                ? "bg-gray-400 cursor-not-allowed"
+                : "bg-black cursor-pointer"
+            }`}
           >
-            Pay & Book
+            {loading ? "Loading..." : "Pay & Book"}
           </button>
         </div>
 
@@ -209,11 +296,17 @@ export default function BookingForm() {
           <p className="text-[18px] font-medium mb-4">Summary</p>
 
           <div className="space-y-3 text-sm">
-            <Row label="Package" value={selectedPackage?.label || "-"} />
+            <Row label="Package" value={selectedPackage?.name || "-"} />
             <Row label="Duration" value={selectedPackage?.duration || "-"} />
             <Row label="Date" value={form.date || "-"} />
             <Row label="Time" value={form.time || "-"} />
             <Row label="Location" value={form.location || "-"} />
+            <div className="border-t border-gray-200 pt-3 mt-3">
+              <Row 
+                label="Price" 
+                value={selectedPackage?.price ? `Rp ${Number(selectedPackage.price).toLocaleString("id-ID")}` : "-"} 
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -223,26 +316,14 @@ export default function BookingForm() {
 
 /* ================= COMPONENT ================= */
 
-function Input({
-  label,
-  placeholder,
-  type = "text",
-  value,
-  onChange,
-}: {
-  label: string;
-  placeholder?: string;
-  type?: string;
-  value?: string;
-  onChange?: (val: string) => void;
-}) {
+function Input({ label, placeholder, type = "text", value, onChange }: any) {
   return (
     <div>
       <p className="mb-2 text-sm">{label}</p>
       <input
         type={type}
         value={value}
-        onChange={(e) => onChange?.(e.target.value)}
+        onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         className="w-full border border-gray-300 px-4 py-3 rounded-md outline-none focus:border-black"
       />
@@ -250,48 +331,30 @@ function Input({
   );
 }
 
-function Textarea({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value?: string;
-  onChange?: (val: string) => void;
-}) {
+function Textarea({ label, value, onChange }: any) {
   return (
     <div>
       <p className="mb-2 text-sm">{label}</p>
       <textarea
         value={value}
-        onChange={(e) => onChange?.(e.target.value)}
+        onChange={(e) => onChange(e.target.value)}
         className="w-full border border-gray-300 px-4 py-3 rounded-md min-h-[120px] outline-none focus:border-black"
       />
     </div>
   );
 }
 
-function Select({
-  label,
-  options,
-  value,
-  onChange,
-}: {
-  label: string;
-  options: string[];
-  value?: string;
-  onChange?: (val: string) => void;
-}) {
+function Select({ label, options, value, onChange }: any) {
   return (
     <div>
       <p className="mb-2 text-sm">{label}</p>
       <select
         value={value}
-        onChange={(e) => onChange?.(e.target.value)}
+        onChange={(e) => onChange(e.target.value)}
         className="w-full border border-gray-300 px-4 py-3 rounded-md outline-none focus:border-black"
       >
         <option value="">Select time</option>
-        {options.map((o) => (
+        {options.map((o: string) => (
           <option key={o}>{o}</option>
         ))}
       </select>
@@ -299,7 +362,7 @@ function Select({
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({ label, value }: any) {
   return (
     <div className="flex justify-between">
       <span>{label}</span>

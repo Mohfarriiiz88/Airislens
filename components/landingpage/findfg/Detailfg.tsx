@@ -17,6 +17,7 @@ type PartnerPackage = {
 };
 
 type PartnerDetail = {
+  id: number;
   slug: string;
   brandName: string;
   description: string;
@@ -118,7 +119,7 @@ export default function DetailFg({
           </div>
 
           <div className="mt-4 flex flex-wrap gap-4">
-            <Link href="/bookingform">
+           <Link href={`/bookingform?fg=${partner.userId}`}>
               <button className="rounded-md bg-black px-10 py-2 text-[18px] text-white">
                 Booking
               </button>
