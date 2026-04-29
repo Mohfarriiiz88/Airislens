@@ -15,21 +15,21 @@ const PACKAGES: PackageOption[] = [
     value: "portrait",
     label: "Portrait",
     desc: "Perfect for personal branding or graduation.",
-    price: "IDR 250K",
+    price: "IDR 250000",
     duration: "60 min",
   },
   {
     value: "couple",
     label: "Couple",
     desc: "Prewedding or couple session.",
-    price: "IDR 350K",
+    price: "IDR 350000",
     duration: "90 min",
   },
   {
     value: "event",
     label: "Event",
     desc: "Small event documentation.",
-    price: "IDR 450K",
+    price: "IDR 450000",
     duration: "120 min",
   },
 ];
@@ -57,11 +57,47 @@ export default function BookingForm() {
 
   const selectedPackage = useMemo(
     () => PACKAGES.find((p) => p.value === form.package),
-    [form.package],
+    [form.package]
   );
 
   const update = (key: keyof typeof form, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  // ================= PAYMENT =================
+  const handlePayment = async () => {
+    if (!form.name || !form.phone) {
+      alert("Please fill name and phone");
+      return;
+    }
+
+    const amount = Number(
+      selectedPackage?.price.replace(/[^0-9]/g, "")
+    );
+
+    const res = await fetch("/api/payment", {
+      method: "POST",
+      body: JSON.stringify({
+        name: form.name,
+        phone: form.phone,
+        amount,
+      }),
+    });
+
+    const data = await res.json();
+
+    // @ts-ignore
+    window.snap.pay(data.token, {
+      onSuccess: function () {
+        alert("Payment success");
+      },
+      onPending: function () {
+        console.log("Pending");
+      },
+      onError: function () {
+        console.log("Error");
+      },
+    });
   };
 
   return (
@@ -87,8 +123,18 @@ export default function BookingForm() {
         <div className="space-y-6 text-[18px]">
           {/* NAME + PHONE */}
           <div className="grid md:grid-cols-2 gap-4 text-[18px]">
-            <Input label="Full Name" placeholder="Your name" />
-            <Input label="WhatsApp Number" placeholder="08xxxx" />
+            <Input
+              label="Full Name"
+              placeholder="Your name"
+              value={form.name}
+              onChange={(v) => update("name", v)}
+            />
+            <Input
+              label="WhatsApp Number"
+              placeholder="08xxxx"
+              value={form.phone}
+              onChange={(v) => update("phone", v)}
+            />
           </div>
 
           {/* PACKAGE */}
@@ -120,19 +166,41 @@ export default function BookingForm() {
 
           {/* DATE + TIME */}
           <div className="grid md:grid-cols-2 gap-4">
-            <Input type="date" label="Date" />
-            <Select label="Time" options={TIME_SLOTS} />
+            <Input
+              type="date"
+              label="Date"
+              value={form.date}
+              onChange={(v) => update("date", v)}
+            />
+            <Select
+              label="Time"
+              options={TIME_SLOTS}
+              value={form.time}
+              onChange={(v) => update("time", v)}
+            />
           </div>
 
           {/* LOCATION */}
-          <Input label="Location" placeholder="Enter location" />
+          <Input
+            label="Location"
+            placeholder="Enter location"
+            value={form.location}
+            onChange={(v) => update("location", v)}
+          />
 
           {/* NOTE */}
-          <Textarea label="Notes (optional)" />
+          <Textarea
+            label="Notes (optional)"
+            value={form.note}
+            onChange={(v) => update("note", v)}
+          />
 
           {/* BUTTON */}
-          <button className="bg-black text-white px-6 py-3 rounded-md text-sm">
-            Submit Booking
+          <button
+            onClick={handlePayment}
+            className="bg-black text-white px-6 py-3 rounded-md text-sm"
+          >
+            Pay & Book
           </button>
         </div>
 
@@ -159,16 +227,22 @@ function Input({
   label,
   placeholder,
   type = "text",
+  value,
+  onChange,
 }: {
   label: string;
   placeholder?: string;
   type?: string;
+  value?: string;
+  onChange?: (val: string) => void;
 }) {
   return (
     <div>
       <p className="mb-2 text-sm">{label}</p>
       <input
         type={type}
+        value={value}
+        onChange={(e) => onChange?.(e.target.value)}
         placeholder={placeholder}
         className="w-full border border-gray-300 px-4 py-3 rounded-md outline-none focus:border-black"
       />
@@ -176,20 +250,46 @@ function Input({
   );
 }
 
-function Textarea({ label }: { label: string }) {
+function Textarea({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value?: string;
+  onChange?: (val: string) => void;
+}) {
   return (
     <div>
       <p className="mb-2 text-sm">{label}</p>
-      <textarea className="w-full border border-gray-300 px-4 py-3 rounded-md min-h-[120px] outline-none focus:border-black" />
+      <textarea
+        value={value}
+        onChange={(e) => onChange?.(e.target.value)}
+        className="w-full border border-gray-300 px-4 py-3 rounded-md min-h-[120px] outline-none focus:border-black"
+      />
     </div>
   );
 }
 
-function Select({ label, options }: { label: string; options: string[] }) {
+function Select({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: string[];
+  value?: string;
+  onChange?: (val: string) => void;
+}) {
   return (
     <div>
       <p className="mb-2 text-sm">{label}</p>
-      <select className="w-full border border-gray-300 px-4 py-3 rounded-md outline-none focus:border-black">
+      <select
+        value={value}
+        onChange={(e) => onChange?.(e.target.value)}
+        className="w-full border border-gray-300 px-4 py-3 rounded-md outline-none focus:border-black"
+      >
         <option value="">Select time</option>
         {options.map((o) => (
           <option key={o}>{o}</option>

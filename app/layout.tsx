@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import Script from "next/script"; // ✅ TAMBAH INI
 import "./globals.css";
 
 /* === FONT SETUP === */
@@ -30,7 +31,6 @@ export const metadata: Metadata = {
   title: "AirisLens - Find Your Perfect Photographer",
   description:
     "AirisLens helps you find the perfect photographer using AI-powered recommendations. Capture your moments with the best.",
-
   icons: {
     icon: "/svg/logogram.svg",
   },
@@ -45,7 +45,16 @@ export default function RootLayout({
   return (
     <html lang="en" className={neueHaas.variable}>
       <body className="bg-black text-white font-sans antialiased">
+
         {children}
+
+        {/* ✅ MIDTRANS SNAP SCRIPT */}
+        <Script
+          src="https://app.sandbox.midtrans.com/snap/snap.js"
+          data-client-key={process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY}
+          strategy="afterInteractive"
+        />
+
       </body>
     </html>
   );
