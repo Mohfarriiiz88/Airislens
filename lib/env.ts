@@ -25,3 +25,23 @@ export function getJwtSecret() {
 export function getOptionalSuperadminEmail() {
   return process.env.SUPERADMIN_EMAIL?.trim().toLowerCase() || null;
 }
+
+function getOptionalEnv(name: string) {
+  return process.env[name]?.trim() || null;
+}
+
+export function getFirebaseAdminConfig() {
+  const projectId = getOptionalEnv("FIREBASE_PROJECT_ID");
+  const clientEmail = getOptionalEnv("FIREBASE_CLIENT_EMAIL");
+  const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n") || null;
+
+  if (!projectId || !clientEmail || !privateKey) {
+    return null;
+  }
+
+  return {
+    projectId,
+    clientEmail,
+    privateKey,
+  };
+}

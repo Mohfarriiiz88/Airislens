@@ -1,5 +1,7 @@
+import AdminBookingPopup from '@/components/dashboard/AdminBookingPopup'
 import Sidebar from '@/components/dashboard/Sidebar'
 import Header from '@/components/dashboard/Header'
+import NotificationBootstrap from '@/components/dashboard/NotificationBootstrap'
 import { getServerSession } from '@/lib/auth/session'
 import { redirect } from 'next/navigation'
 
@@ -20,6 +22,8 @@ export default async function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-[#f5f5f5] text-black flex">
+      <AdminBookingPopup />
+      <NotificationBootstrap />
       <Sidebar />
 
       <div className="flex-1 flex flex-col">

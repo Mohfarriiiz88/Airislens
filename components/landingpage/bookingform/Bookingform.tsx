@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useEffect } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 
 const TIME_SLOTS = [
   "08:00",
@@ -13,8 +13,52 @@ const TIME_SLOTS = [
   "17:00",
 ];
 
+type BookingFormState = {
+  name: string;
+  phone: string;
+  package: string | number;
+  date: string;
+  time: string;
+  location: string;
+  note: string;
+};
+
+type PartnerPackage = {
+  id: number;
+  name: string;
+  duration: string;
+  price: number;
+  description?: string;
+};
+
+type InputProps = {
+  label: string;
+  placeholder?: string;
+  type?: string;
+  value: string;
+  onChange: (value: string) => void;
+};
+
+type TextareaProps = {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+};
+
+type SelectProps = {
+  label: string;
+  options: string[];
+  value: string;
+  onChange: (value: string) => void;
+};
+
+type RowProps = {
+  label: string;
+  value: string;
+};
+
 export default function BookingForm() {
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<BookingFormState>({
     name: "",
     phone: "",
     package: "" as string | number,
@@ -24,13 +68,12 @@ export default function BookingForm() {
     note: "",
   });
 
-  const [packages, setPackages] = useState<any[]>([]);
+  const [packages, setPackages] = useState<PartnerPackage[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
 
   const searchParams = useSearchParams();
-  const router = useRouter();
   const fgId = searchParams.get("fg");
 
   // ================= MOUNT CHECK =================
@@ -96,7 +139,7 @@ export default function BookingForm() {
     return packages.find((p) => p.id === Number(form.package) || p.id === form.package);
   }, [form.package, packages]);
 
-  const update = (key: keyof typeof form, value: any) => {
+  const update = (key: keyof BookingFormState, value: string | number) => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
@@ -126,12 +169,16 @@ export default function BookingForm() {
 
     const res = await fetch("/api/payment", {
       method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({
         name: form.name,
         phone: form.phone,
         amount,
         package: selectedPackage.name,
         packageId: selectedPackage.id,
+        photographerId: Number(fgId),
         date: form.date,
         time: form.time,
         location: form.location,
@@ -146,7 +193,6 @@ export default function BookingForm() {
       return;
     }
 
-    // @ts-ignore
     window.snap.pay(data.token, {
       onSuccess: function () {
         alert("Payment success");
@@ -316,7 +362,7 @@ export default function BookingForm() {
 
 /* ================= COMPONENT ================= */
 
-function Input({ label, placeholder, type = "text", value, onChange }: any) {
+function Input({ label, placeholder, type = "text", value, onChange }: InputProps) {
   return (
     <div>
       <p className="mb-2 text-sm">{label}</p>
@@ -331,7 +377,7 @@ function Input({ label, placeholder, type = "text", value, onChange }: any) {
   );
 }
 
-function Textarea({ label, value, onChange }: any) {
+function Textarea({ label, value, onChange }: TextareaProps) {
   return (
     <div>
       <p className="mb-2 text-sm">{label}</p>
@@ -344,7 +390,7 @@ function Textarea({ label, value, onChange }: any) {
   );
 }
 
-function Select({ label, options, value, onChange }: any) {
+function Select({ label, options, value, onChange }: SelectProps) {
   return (
     <div>
       <p className="mb-2 text-sm">{label}</p>
@@ -362,7 +408,7 @@ function Select({ label, options, value, onChange }: any) {
   );
 }
 
-function Row({ label, value }: any) {
+function Row({ label, value }: RowProps) {
   return (
     <div className="flex justify-between">
       <span>{label}</span>

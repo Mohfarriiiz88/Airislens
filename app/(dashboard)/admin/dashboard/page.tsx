@@ -1,27 +1,57 @@
-import StatCard from '@/components/dashboard/StatCard'
-import AnalyticsPlaceholder from '@/components/dashboard/AnalyticsPlaceholder'
-import UpcomingList from '@/components/dashboard/UpcomingList'
-import BookingTable from '@/components/dashboard/BookingTable'
+import { redirect } from "next/navigation";
 
-export default function DashboardPage() {
+import AnalyticsPlaceholder from "@/components/dashboard/AnalyticsPlaceholder";
+import AdminLiveRefresh from "@/components/dashboard/AdminLiveRefresh";
+import BookingTable from "@/components/dashboard/BookingTable";
+import StatCard from "@/components/dashboard/StatCard";
+import UpcomingList from "@/components/dashboard/UpcomingList";
+import { getBookingDashboardSnapshot } from "@/lib/bookings";
+import { getServerSession } from "@/lib/auth/session";
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+export default async function DashboardPage() {
+  const session = await getServerSession();
+
+  if (!session || session.role !== "admin") {
+    redirect("/login");
+  }
+
+  const userId = Number(session.sub);
+  const snapshot = await getBookingDashboardSnapshot(userId);
+
   return (
     <div className="space-y-6">
-      {/* Summary */}
+      <AdminLiveRefresh />
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Total Booking" value="128" />
-        <StatCard title="Booking Hari Ini" value="3" />
-        <StatCard title="Bulan Ini" value="27" />
-        <StatCard title="Pendapatan" value="Rp 12.500.000" />
+        <StatCard
+          title="Total Booking"
+          value={String(snapshot.totalBookings)}
+        />
+        <StatCard
+          title="Booking Hari Ini"
+          value={String(snapshot.todayBookings)}
+        />
+        <StatCard title="Bulan Ini" value={String(snapshot.monthBookings)} />
+        <StatCard
+          title="Pendapatan"
+          value={formatCurrency(snapshot.totalRevenue)}
+        />
       </div>
 
-      {/* Analytics + Upcoming */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <AnalyticsPlaceholder />
-        <UpcomingList />
+        <AnalyticsPlaceholder statusBreakdown={snapshot.statusBreakdown} />
+        <UpcomingList bookings={snapshot.upcomingBookings} />
       </div>
 
-      {/* Table */}
-      <BookingTable />
+      <BookingTable bookings={snapshot.recentBookings} />
     </div>
-  )
+  );
 }
