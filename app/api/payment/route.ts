@@ -3,9 +3,13 @@ import { NextResponse } from "next/server";
 
 import { createBooking } from "@/lib/bookings";
 import { getServerSession } from "@/lib/auth/session";
-import { sendBookingNotificationToAdmin } from "@/lib/notifications";
+import { getJwtSecret } from "@/lib/env";
+import { isTimeSlotUnavailable } from "@/lib/schedules";
+import { normalizeIndonesianPhoneNumber } from "@/lib/whatsapp";
 
 export const runtime = "nodejs";
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const TIME_PATTERN = /^\d{2}:\d{2}$/;
 
 type PaymentRequestBody = {
   name?: string;
@@ -37,10 +41,35 @@ export async function POST(req: Request) {
       !body.package ||
       !body.date ||
       !body.time ||
+      !DATE_PATTERN.test(body.date) ||
+      !TIME_PATTERN.test(body.time) ||
       !Number.isInteger(photographerId) ||
       photographerId <= 0
     ) {
       return NextResponse.json({ error: "Invalid input" }, { status: 400 });
+    }
+
+    let normalizedCustomerPhone: string;
+
+    try {
+      normalizedCustomerPhone = normalizeIndonesianPhoneNumber(body.phone);
+    } catch (error) {
+      return NextResponse.json(
+        {
+          error:
+            error instanceof Error
+              ? error.message
+              : "Format nomor WhatsApp tidak valid.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (await isTimeSlotUnavailable(photographerId, body.date, body.time)) {
+      return NextResponse.json(
+        { error: "Jadwal pada jam tersebut sudah tidak tersedia." },
+        { status: 409 }
+      );
     }
 
     const snap = new midtransClient.Snap({
@@ -57,7 +86,7 @@ export async function POST(req: Request) {
       },
       customer_details: {
         first_name: body.name,
-        phone: body.phone,
+        phone: normalizedCustomerPhone,
       },
     };
 
@@ -69,7 +98,7 @@ export async function POST(req: Request) {
       customerUserId,
       packageId: body.packageId,
       customerName: body.name,
-      customerPhone: body.phone,
+      customerPhone: normalizedCustomerPhone,
       packageName: body.package,
       amount,
       bookingDate: body.date,
@@ -80,16 +109,41 @@ export async function POST(req: Request) {
     });
 
     try {
-      await sendBookingNotificationToAdmin({
-        customerName: body.name,
-        packageName: body.package,
-        date: body.date,
-        time: body.time,
-        location: body.location || "",
-        photographerUserId: photographerId,
-      });
+      const notificationResponse = await fetch(
+        new URL("/api/notifications/whatsapp", req.url),
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-airislens-internal-auth": getJwtSecret(),
+          },
+          body: JSON.stringify({
+            customerName: body.name,
+            customerPhone: normalizedCustomerPhone,
+            packageName: body.package,
+            date: body.date,
+            time: body.time,
+            location: body.location || "",
+            note: body.note || "",
+          }),
+          cache: "no-store",
+        }
+      );
+
+      if (!notificationResponse.ok) {
+        const notificationBody = (await notificationResponse
+          .json()
+          .catch(() => null)) as { error?: string; detail?: string } | null;
+
+        throw new Error(
+          notificationBody?.detail ||
+            notificationBody?.error ||
+            `HTTP ${notificationResponse.status}`
+        );
+      }
     } catch (notificationError) {
-      console.error("FCM NOTIFICATION ERROR:", notificationError);
+      // Booking stays successful even if WhatsApp delivery fails.
+      console.error("FONNTE WHATSAPP ERROR:", notificationError);
     }
 
     return NextResponse.json({

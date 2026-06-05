@@ -22,6 +22,13 @@ export function getJwtSecret() {
   return getRequiredEnv("JWT_SECRET");
 }
 
+export function getFonnteConfig() {
+  return {
+    token: getRequiredEnv("FONNTE_TOKEN").trim(),
+    adminPhone: getRequiredEnv("ADMIN_WA").trim(),
+  };
+}
+
 export function getOptionalSuperadminEmail() {
   return process.env.SUPERADMIN_EMAIL?.trim().toLowerCase() || null;
 }

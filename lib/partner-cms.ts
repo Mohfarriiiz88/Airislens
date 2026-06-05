@@ -106,6 +106,18 @@ export type PublicPartnerDetail = {
   packages: PartnerPackage[];
 };
 
+export type PublicPartnerKnowledge = {
+  userId: number;
+  slug: string;
+  brandName: string;
+  category: string;
+  description: string;
+  specializations: string[];
+  address: string;
+  whatsapp: string;
+  packages: PartnerPackage[];
+};
+
 declare global {
   var __airislensPartnerCmsReady: Promise<void> | undefined;
 }
@@ -703,4 +715,66 @@ export async function getPublicPartnerDetailBySlug(slug: string) {
     gallery,
     packages,
   };
+}
+
+export async function listPublicPartnerKnowledge() {
+  await ensurePartnerProfilesForAdmins();
+
+  const pool = getDbPool();
+  const [profileRows] = await pool.execute<PartnerProfileRow[]>(`
+      SELECT
+        p.user_id,
+        u.email,
+        p.brand_name,
+        p.slug,
+        p.description,
+        p.specializations_json,
+        p.address,
+        p.whatsapp,
+        p.instagram,
+        p.tiktok,
+        p.facebook,
+        p.website,
+        p.profile_photo_url
+      FROM partner_profiles p
+      INNER JOIN users u ON u.id = p.user_id
+      WHERE u.role = 'admin'
+      ORDER BY p.brand_name ASC
+    `);
+  const [packageRows] = await pool.execute<PartnerPackageRow[]>(`
+      SELECT id, user_id, name, duration, price, description
+      FROM partner_packages
+      ORDER BY user_id ASC, id ASC
+    `);
+
+  const packagesByUserId = new Map<number, PartnerPackage[]>();
+
+  for (const row of packageRows) {
+    const currentPackages = packagesByUserId.get(row.user_id) ?? [];
+
+    currentPackages.push({
+      id: row.id,
+      name: row.name,
+      duration: row.duration,
+      price: Number(row.price),
+      description: row.description,
+    });
+    packagesByUserId.set(row.user_id, currentPackages);
+  }
+
+  return profileRows.map((profile) => {
+    const specializations = parseSpecializations(profile.specializations_json);
+
+    return {
+      userId: profile.user_id,
+      slug: profile.slug,
+      brandName: profile.brand_name,
+      category: specializations[0] || "General",
+      description: profile.description,
+      specializations,
+      address: profile.address,
+      whatsapp: profile.whatsapp,
+      packages: packagesByUserId.get(profile.user_id) ?? [],
+    };
+  });
 }

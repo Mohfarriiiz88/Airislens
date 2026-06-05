@@ -2,6 +2,7 @@ type MidtransSnapCallbacks = {
   onSuccess?: () => void;
   onPending?: () => void;
   onError?: () => void;
+  onClose?: () => void;
 };
 
 type MidtransSnap = {

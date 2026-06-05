@@ -3,15 +3,7 @@
 import { useMemo, useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 
-const TIME_SLOTS = [
-  "08:00",
-  "09:00",
-  "10:00",
-  "11:00",
-  "13:00",
-  "15:00",
-  "17:00",
-];
+import { BOOKING_TIME_SLOTS } from "@/lib/time-slots";
 
 type BookingFormState = {
   name: string;
@@ -47,14 +39,21 @@ type TextareaProps = {
 
 type SelectProps = {
   label: string;
-  options: string[];
+  options: readonly string[];
   value: string;
   onChange: (value: string) => void;
+  disabledOptions?: string[];
+  error?: string | null;
 };
 
 type RowProps = {
   label: string;
   value: string;
+};
+
+type PaymentFeedback = {
+  tone: "success" | "warning" | "error";
+  message: string;
 };
 
 export default function BookingForm() {
@@ -72,6 +71,12 @@ export default function BookingForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [unavailableTimes, setUnavailableTimes] = useState<string[]>([]);
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
+  const [availabilityError, setAvailabilityError] = useState<string | null>(null);
+  const [timeError, setTimeError] = useState<string | null>(null);
+  const [submitLoading, setSubmitLoading] = useState(false);
+  const [paymentFeedback, setPaymentFeedback] = useState<PaymentFeedback | null>(null);
 
   const searchParams = useSearchParams();
   const fgId = searchParams.get("fg");
@@ -85,12 +90,10 @@ export default function BookingForm() {
   useEffect(() => {
     // Wait for component to mount and searchParams to be ready
     if (!mounted) {
-      console.log("Component not mounted yet");
       return;
     }
 
     if (!fgId) {
-      console.warn("No photographer ID found in URL parameter 'fg'");
       setLoading(false);
       setError("No photographer selected. Please go back and select a photographer.");
       return;
@@ -100,7 +103,6 @@ export default function BookingForm() {
       try {
         setLoading(true);
         setError(null);
-        console.log("Fetching packages for fgId:", fgId);
 
         const res = await fetch(`/api/packages/${fgId}`);
         
@@ -110,7 +112,6 @@ export default function BookingForm() {
         }
 
         const data = await res.json();
-        console.log("Packages received:", data);
 
         setPackages(data.packages || []);
 
@@ -134,6 +135,72 @@ export default function BookingForm() {
     fetchPackages();
   }, [fgId, mounted]);
 
+  useEffect(() => {
+    if (!mounted || !fgId || !form.date) {
+      setUnavailableTimes([]);
+      setAvailabilityError(null);
+      setAvailabilityLoading(false);
+      return;
+    }
+
+    let ignore = false;
+    const currentTime = form.time;
+
+    const fetchAvailability = async () => {
+      setAvailabilityLoading(true);
+      setAvailabilityError(null);
+
+      try {
+        const response = await fetch(
+          `/api/availability?fg=${encodeURIComponent(fgId)}&date=${encodeURIComponent(form.date)}`,
+          {
+            cache: "no-store",
+          }
+        );
+
+        const data = (await response.json().catch(() => null)) as
+          | { message?: string; unavailableTimes?: string[] }
+          | null;
+
+        if (!response.ok) {
+          throw new Error(
+            data?.message || "Gagal memuat jadwal yang sudah terisi."
+          );
+        }
+
+        if (!ignore) {
+          const nextUnavailable = data?.unavailableTimes ?? [];
+          setUnavailableTimes(nextUnavailable);
+
+          if (currentTime && nextUnavailable.includes(currentTime)) {
+            setTimeError("Sudah terbooking");
+          } else {
+            setTimeError(null);
+          }
+        }
+      } catch (err) {
+        if (!ignore) {
+          setUnavailableTimes([]);
+          setAvailabilityError(
+            err instanceof Error
+              ? err.message
+              : "Gagal memuat jadwal yang sudah terisi."
+          );
+        }
+      } finally {
+        if (!ignore) {
+          setAvailabilityLoading(false);
+        }
+      }
+    };
+
+    void fetchAvailability();
+
+    return () => {
+      ignore = true;
+    };
+  }, [fgId, form.date, form.time, mounted]);
+
   // ================= SELECTED PACKAGE =================
   const selectedPackage = useMemo(() => {
     return packages.find((p) => p.id === Number(form.package) || p.id === form.package);
@@ -143,67 +210,152 @@ export default function BookingForm() {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
+  const handleTimeChange = (value: string) => {
+    update("time", value);
+    setTimeError(unavailableTimes.includes(value) ? "Sudah terbooking" : null);
+  };
+
   // ================= PAYMENT =================
   const handlePayment = async () => {
+    setPaymentFeedback(null);
+
     if (!form.name || !form.phone) {
-      alert("Please fill name and phone");
+      setPaymentFeedback({
+        tone: "error",
+        message: "Please fill in your name and WhatsApp number.",
+      });
       return;
     }
 
     if (!form.date || !form.time) {
-      alert("Please select date and time");
+      setPaymentFeedback({
+        tone: "error",
+        message: "Please select a booking date and time.",
+      });
       return;
     }
 
     if (!selectedPackage) {
-      alert("Please select a package");
+      setPaymentFeedback({
+        tone: "error",
+        message: "Please select a package first.",
+      });
+      return;
+    }
+
+    if (unavailableTimes.includes(form.time)) {
+      setTimeError("Sudah terbooking");
+      setPaymentFeedback({
+        tone: "error",
+        message: "Selected time is no longer available.",
+      });
       return;
     }
 
     const amount = Number(selectedPackage.price);
 
     if (amount <= 0) {
-      alert("Invalid package price");
+      setPaymentFeedback({
+        tone: "error",
+        message: "Invalid package price.",
+      });
       return;
     }
 
-    const res = await fetch("/api/payment", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        name: form.name,
-        phone: form.phone,
-        amount,
-        package: selectedPackage.name,
-        packageId: selectedPackage.id,
-        photographerId: Number(fgId),
-        date: form.date,
-        time: form.time,
-        location: form.location,
-        note: form.note,
-      }),
-    });
+    setSubmitLoading(true);
 
-    const data = await res.json();
+    try {
+      const res = await fetch("/api/payment", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: form.name,
+          phone: form.phone,
+          amount,
+          package: selectedPackage.name,
+          packageId: selectedPackage.id,
+          photographerId: Number(fgId),
+          date: form.date,
+          time: form.time,
+          location: form.location,
+          note: form.note,
+        }),
+      });
 
-    if (!data.token) {
-      alert("Failed to create payment token");
-      return;
+      const data = (await res.json().catch(() => null)) as
+        | { error?: string; token?: string }
+        | null;
+
+      if (!res.ok) {
+        if (res.status === 409) {
+          setTimeError("Sudah terbooking");
+        }
+        setPaymentFeedback({
+          tone: "error",
+          message: data?.error || "Failed to create payment token.",
+        });
+        return;
+      }
+
+      if (!data?.token) {
+        setPaymentFeedback({
+          tone: "error",
+          message: "Failed to create payment token.",
+        });
+        return;
+      }
+
+      if (typeof window.snap?.pay !== "function") {
+        setPaymentFeedback({
+          tone: "error",
+          message: "Payment popup is not ready yet. Please try again.",
+        });
+        return;
+      }
+
+      window.snap.pay(data.token, {
+        onSuccess: function () {
+          setPaymentFeedback({
+            tone: "success",
+            message:
+              "Booking berhasil dibuat dan pembayaran Anda sukses. Status booking akan diperbarui otomatis.",
+          });
+        },
+        onPending: function () {
+          setPaymentFeedback({
+            tone: "warning",
+            message:
+              "Booking sudah dibuat. Pembayaran Anda masih menunggu penyelesaian, dan status booking akan sinkron otomatis setelah Midtrans mengirim update.",
+          });
+        },
+        onError: function () {
+          setPaymentFeedback({
+            tone: "error",
+            message:
+              "Pembayaran gagal diproses. Booking sudah tercatat, dan status akhirnya akan mengikuti update Midtrans.",
+          });
+        },
+        onClose: function () {
+          setPaymentFeedback({
+            tone: "warning",
+            message:
+              "Popup pembayaran ditutup. Booking sudah dibuat dan tetap menunggu pembayaran sampai Midtrans mengirim status berikutnya.",
+          });
+        },
+      });
+    } catch (error) {
+      setPaymentFeedback({
+        tone: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Failed to start payment.",
+      });
+    } finally {
+      setSubmitLoading(false);
     }
-
-    window.snap.pay(data.token, {
-      onSuccess: function () {
-        alert("Payment success");
-      },
-      onPending: function () {
-        console.log("Pending");
-      },
-      onError: function () {
-        console.log("Error");
-      },
-    });
   };
 
   return (
@@ -302,11 +454,41 @@ export default function BookingForm() {
 
             <Select
               label="Time"
-              options={TIME_SLOTS}
+              options={BOOKING_TIME_SLOTS}
               value={form.time}
-              onChange={(v) => update("time", v)}
+              onChange={handleTimeChange}
+              disabledOptions={unavailableTimes}
+              error={timeError}
             />
           </div>
+
+          {form.date && (
+            <div className="text-sm text-gray-500">
+              {availabilityLoading && <p>Checking availability...</p>}
+              {!availabilityLoading && availabilityError && (
+                <p className="text-red-500">{availabilityError}</p>
+              )}
+              {!availabilityLoading && !availabilityError && unavailableTimes.length > 0 && (
+                <p>
+                  Unavailable times on this date: {unavailableTimes.join(", ")}
+                </p>
+              )}
+            </div>
+          )}
+
+          {paymentFeedback && (
+            <div
+              className={`rounded-md border px-4 py-3 text-sm ${
+                paymentFeedback.tone === "success"
+                  ? "border-green-200 bg-green-50 text-green-700"
+                  : paymentFeedback.tone === "warning"
+                    ? "border-yellow-200 bg-yellow-50 text-yellow-700"
+                    : "border-red-200 bg-red-50 text-red-700"
+              }`}
+            >
+              {paymentFeedback.message}
+            </div>
+          )}
 
           {/* LOCATION */}
           <Input
@@ -326,14 +508,14 @@ export default function BookingForm() {
           {/* BUTTON */}
           <button
             onClick={handlePayment}
-            disabled={loading || !selectedPackage || !fgId || !mounted}
+            disabled={loading || submitLoading || !selectedPackage || !fgId || !mounted}
             className={`px-6 py-3 rounded-md text-white ${
-              loading || !selectedPackage || !fgId || !mounted
+              loading || submitLoading || !selectedPackage || !fgId || !mounted
                 ? "bg-gray-400 cursor-not-allowed"
                 : "bg-black cursor-pointer"
             }`}
           >
-            {loading ? "Loading..." : "Pay & Book"}
+            {loading || submitLoading ? "Processing..." : "Pay & Book"}
           </button>
         </div>
 
@@ -390,20 +572,38 @@ function Textarea({ label, value, onChange }: TextareaProps) {
   );
 }
 
-function Select({ label, options, value, onChange }: SelectProps) {
+function Select({
+  label,
+  options,
+  value,
+  onChange,
+  disabledOptions = [],
+  error = null,
+}: SelectProps) {
   return (
     <div>
       <p className="mb-2 text-sm">{label}</p>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full border border-gray-300 px-4 py-3 rounded-md outline-none focus:border-black"
+        className={`w-full border px-4 py-3 rounded-md outline-none ${
+          error
+            ? "border-red-500 focus:border-red-500"
+            : "border-gray-300 focus:border-black"
+        }`}
       >
         <option value="">Select time</option>
         {options.map((o: string) => (
-          <option key={o}>{o}</option>
+          <option
+            key={o}
+            value={o}
+            disabled={disabledOptions.includes(o)}
+          >
+            {disabledOptions.includes(o) ? `${o} - Sudah terbooking` : o}
+          </option>
         ))}
       </select>
+      {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
     </div>
   );
 }

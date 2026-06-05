@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
-import Script from "next/script"; // ✅ TAMBAH INI
+import Script from "next/script";
+import AirisChatbot from "@/components/AirisChatbot";
 import "./globals.css";
 
-/* === FONT SETUP === */
 const neueHaas = localFont({
   src: [
     {
@@ -26,7 +26,6 @@ const neueHaas = localFont({
   display: "swap",
 });
 
-/* === METADATA === */
 export const metadata: Metadata = {
   title: "AirisLens - Find Your Perfect Photographer",
   description:
@@ -36,25 +35,21 @@ export const metadata: Metadata = {
   },
 };
 
-/* === ROOT LAYOUT === */
 export default function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode;
-}) {
+}>) {
   return (
     <html lang="en" className={neueHaas.variable}>
       <body className="bg-black text-white font-sans antialiased">
-
         {children}
-
-        {/* ✅ MIDTRANS SNAP SCRIPT */}
+        <AirisChatbot />
         <Script
           src="https://app.sandbox.midtrans.com/snap/snap.js"
           data-client-key={process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY}
           strategy="afterInteractive"
         />
-
       </body>
     </html>
   );

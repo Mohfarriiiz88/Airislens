@@ -1,0 +1,180 @@
+Project AirisLens {
+  database_type: "MySQL"
+  Note: "Schema DBML untuk dipakai di dbdiagram.io. Relasi di bawah merepresentasikan relasi logis aplikasi; sebagian belum dideklarasikan sebagai FOREIGN KEY di SQL runtime."
+}
+
+Enum user_role {
+  superadmin
+  admin
+  user
+}
+
+Enum partner_application_status {
+  pending
+  approved
+  rejected
+}
+
+Enum booking_status {
+  pending
+  confirmed
+  completed
+  cancelled
+}
+
+Table users {
+  id bigint [pk, increment, not null]
+  name varchar(100) [not null]
+  email varchar(191) [not null]
+  password_hash text [not null]
+  role user_role [not null, default: 'user']
+  superadmin_slot tinyint [note: "Generated column in MySQL: 1 when role = 'superadmin', else NULL"]
+  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    email [unique, name: "users_email_unique"]
+    superadmin_slot [unique, name: "users_superadmin_singleton"]
+  }
+}
+
+Table partner_profiles {
+  user_id bigint [pk, not null]
+  slug varchar(191) [not null]
+  brand_name varchar(100) [not null]
+  description text [not null]
+  specializations_json text [not null, note: "JSON string array of specializations"]
+  address text [not null]
+  whatsapp varchar(30) [not null]
+  instagram varchar(191) [not null, default: '']
+  tiktok varchar(191) [not null, default: '']
+  facebook varchar(191) [not null, default: '']
+  website varchar(191) [not null, default: '']
+  profile_photo_url varchar(255) [not null, default: '']
+  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    slug [unique, name: "partner_profiles_slug_unique"]
+  }
+}
+
+Table partner_gallery_items {
+  id bigint [pk, increment, not null]
+  user_id bigint [not null]
+  title varchar(100) [not null]
+  category varchar(100) [not null]
+  image_url varchar(255) [not null]
+  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    user_id [name: "partner_gallery_items_user_id_idx"]
+  }
+}
+
+Table partner_packages {
+  id bigint [pk, increment, not null]
+  user_id bigint [not null]
+  name varchar(100) [not null]
+  duration varchar(100) [not null]
+  price bigint [not null]
+  description text [not null]
+  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    user_id [name: "partner_packages_user_id_idx"]
+  }
+}
+
+Table partner_schedules {
+  id bigint [pk, increment, not null]
+  user_id bigint [not null]
+  title varchar(191) [not null]
+  schedule_date date [not null]
+  schedule_time varchar(10) [not null]
+  location varchar(191) [not null, default: '']
+  note text [not null]
+  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    (user_id, schedule_date, schedule_time) [unique, name: "partner_schedules_user_date_time_unique"]
+    user_id [name: "partner_schedules_user_id_idx"]
+    schedule_date [name: "partner_schedules_schedule_date_idx"]
+  }
+}
+
+Table partner_applications {
+  id bigint [pk, increment, not null]
+  name varchar(100) [not null]
+  email varchar(191) [not null]
+  phone varchar(30) [not null]
+  location varchar(100) [not null]
+  category varchar(100) [not null]
+  experience varchar(100) [not null]
+  portfolio_link varchar(255) [not null]
+  about_you text [not null]
+  status partner_application_status [not null, default: 'pending']
+  submitted_by_user_id bigint [null]
+  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    email [name: "partner_applications_email_idx"]
+    status [name: "partner_applications_status_idx"]
+    submitted_by_user_id [name: "partner_applications_user_id_idx"]
+  }
+}
+
+Table bookings {
+  id bigint [pk, increment, not null]
+  order_id varchar(64) [not null]
+  photographer_user_id bigint [not null]
+  customer_user_id bigint [null]
+  package_id bigint [null]
+  customer_name varchar(191) [not null]
+  customer_phone varchar(30) [not null]
+  package_name varchar(191) [not null, note: "Snapshot nama paket saat booking dibuat"]
+  amount bigint [not null]
+  booking_date date [not null]
+  booking_time varchar(10) [not null]
+  location text [not null]
+  note text [not null]
+  status booking_status [not null, default: 'pending']
+  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    order_id [unique, name: "bookings_order_id_unique"]
+    photographer_user_id [name: "bookings_photographer_user_id_idx"]
+    customer_user_id [name: "bookings_customer_user_id_idx"]
+    booking_date [name: "bookings_booking_date_idx"]
+    status [name: "bookings_status_idx"]
+  }
+}
+
+Table admin_notification_tokens {
+  id bigint [pk, increment, not null]
+  user_id bigint [not null]
+  fcm_token varchar(512) [not null]
+  user_agent varchar(255) [not null, default: '']
+  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    (user_id, fcm_token) [unique, name: "admin_notification_tokens_user_token_unique"]
+    user_id [name: "admin_notification_tokens_user_id_idx"]
+  }
+}
+
+Ref: partner_profiles.user_id > users.id
+Ref: partner_gallery_items.user_id > users.id
+Ref: partner_packages.user_id > users.id
+Ref: partner_schedules.user_id > users.id
+Ref: partner_applications.submitted_by_user_id > users.id
+Ref: bookings.photographer_user_id > users.id
+Ref: bookings.customer_user_id > users.id
+Ref: bookings.package_id > partner_packages.id
+Ref: admin_notification_tokens.user_id > users.id

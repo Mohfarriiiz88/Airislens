@@ -92,6 +92,17 @@ export type UserBookingHistoryItem = {
   status: AdminBookingStatus;
 };
 
+export type BookingCalendarItem = {
+  id: number;
+  orderId: string;
+  customerName: string;
+  packageName: string;
+  bookingDate: string;
+  bookingTime: string;
+  location: string;
+  status: AdminBookingStatus;
+};
+
 function mapStatusFromDb(status: BookingStatusDb): AdminBookingStatus {
   switch (status) {
     case "confirmed":
@@ -307,6 +318,32 @@ export async function updateAdminBookingStatus(
       LIMIT 1
     `,
     [mapStatusToDb(status), bookingId, userId]
+  );
+
+  return result.affectedRows > 0;
+}
+
+export async function updateBookingStatusByOrderId(
+  orderId: string,
+  status: AdminBookingStatus
+) {
+  await ensureBookingSchema();
+
+  const normalizedOrderId = orderId.trim();
+
+  if (!normalizedOrderId) {
+    return false;
+  }
+
+  const pool = getDbPool();
+  const [result] = await pool.execute<ResultSetHeader>(
+    `
+      UPDATE bookings
+      SET status = ?
+      WHERE order_id = ?
+      LIMIT 1
+    `,
+    [mapStatusToDb(status), normalizedOrderId]
   );
 
   return result.affectedRows > 0;
@@ -532,4 +569,46 @@ export async function listUserBookingHistory(userId: number) {
     location: row.location,
     status: mapStatusFromDb(row.status),
   }));
+}
+
+export async function listAdminBookingsByDate(userId: number, date: string) {
+  await ensureBookingSchema();
+
+  const pool = getDbPool();
+  const [rows] = await pool.execute<BookingRow[]>(
+    `
+      SELECT
+        id,
+        order_id,
+        photographer_user_id,
+        customer_user_id,
+        package_id,
+        customer_name,
+        customer_phone,
+        package_name,
+        amount,
+        DATE_FORMAT(booking_date, '%Y-%m-%d') AS booking_date,
+        booking_time,
+        location,
+        note,
+        status,
+        created_at
+      FROM bookings
+      WHERE photographer_user_id = ?
+        AND booking_date = ?
+      ORDER BY booking_time ASC, id ASC
+    `,
+    [userId, date]
+  );
+
+  return rows.map((row) => ({
+    id: row.id,
+    orderId: row.order_id,
+    customerName: row.customer_name,
+    packageName: row.package_name,
+    bookingDate: row.booking_date,
+    bookingTime: row.booking_time,
+    location: row.location,
+    status: mapStatusFromDb(row.status),
+  })) satisfies BookingCalendarItem[];
 }

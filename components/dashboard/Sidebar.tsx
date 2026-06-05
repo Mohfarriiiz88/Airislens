@@ -1,10 +1,12 @@
 "use client";
 
+import NextImage from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { useRouter } from "next/navigation";
 import {
+  CalendarDays,
   LayoutDashboard,
   Package,
   Image,
@@ -16,6 +18,7 @@ import { LogOut,ExternalLink  } from "lucide-react";
 const menu = [
   { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
   { label: "Booking", href: "/admin/bookinglist", icon: ClipboardList },
+  { label: "Jadwal", href: "/admin/calender", icon: CalendarDays },
   { label: "Paket", href: "/admin/paket", icon: Package },
   { label: "Galeri", href: "/admin/galeri", icon: Image },
   { label: "Profile", href: "/admin/profile", icon: User },
@@ -53,9 +56,11 @@ export default function Sidebar() {
         `}
         onClick={() => setCollapsed(!collapsed)}
       >
-        <img
+        <NextImage
           src={collapsed ? "/svg/logogram.svg" : "/svg/logotype.svg"}
           alt="logo"
+          width={128}
+          height={32}
           className={`${collapsed ? "w-8" : "w-32"}`}
         />
       </div>
