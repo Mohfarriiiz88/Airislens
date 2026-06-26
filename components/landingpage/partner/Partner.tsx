@@ -1,37 +1,91 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+type IdentityForm = {
+  name: string;
+  email: string;
+  phone: string;
+};
+
+type PartnerForm = {
+  location: string;
+  category: string;
+  experience: string;
+  portfolio: string;
+  about: string;
+};
+
+const emptyPartnerForm: PartnerForm = {
+  location: "",
+  category: "",
+  experience: "",
+  portfolio: "",
+  about: "",
+};
 
 export default function Partner() {
-  const [form, setForm] = useState({
+  const [identity, setIdentity] = useState<IdentityForm>({
     name: "",
     email: "",
     phone: "",
-    location: "",
-    category: "",
-    experience: "",
-    portfolio: "",
-    about: "",
   });
-
+  const [form, setForm] = useState<PartnerForm>(emptyPartnerForm);
   const [loading, setLoading] = useState(false);
+  const [loadingIdentity, setLoadingIdentity] = useState(true);
   const [message, setMessage] = useState<{
     type: "success" | "error";
     text: string;
   } | null>(null);
 
-  const update = (key: keyof typeof form, value: string) => {
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const response = await fetch("/api/auth/me", {
+          cache: "no-store",
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.message || "Gagal mengambil data akun.");
+        }
+
+        setIdentity({
+          name: data.user?.name || "",
+          email: data.user?.email || "",
+          phone: data.user?.phone || "",
+        });
+      } catch (error) {
+        setMessage({
+          type: "error",
+          text:
+            error instanceof Error
+              ? error.message
+              : "Terjadi kesalahan saat mengambil data akun.",
+        });
+      } finally {
+        setLoadingIdentity(false);
+      }
+    };
+
+    fetchUser();
+  }, []);
+
+  const updateIdentity = (key: keyof IdentityForm, value: string) => {
+    setIdentity((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const updateForm = (key: keyof PartnerForm, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
   const handleSubmit = async () => {
     setMessage(null);
 
-    // Validate all fields
     if (
-      !form.name ||
-      !form.email ||
-      !form.phone ||
+      !identity.name ||
+      !identity.email ||
+      !identity.phone ||
       !form.location ||
       !form.category ||
       !form.experience ||
@@ -54,9 +108,7 @@ export default function Partner() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          name: form.name,
-          email: form.email,
-          phone: form.phone,
+          phone: identity.phone,
           location: form.location,
           category: form.category,
           experience: form.experience,
@@ -75,18 +127,7 @@ export default function Partner() {
         type: "success",
         text: data.message,
       });
-
-      // Reset form
-      setForm({
-        name: "",
-        email: "",
-        phone: "",
-        location: "",
-        category: "",
-        experience: "",
-        portfolio: "",
-        about: "",
-      });
+      setForm(emptyPartnerForm);
     } catch (error) {
       setMessage({
         type: "error",
@@ -103,78 +144,77 @@ export default function Partner() {
   return (
     <section
       data-navbar-tone="dark"
-      className="min-h-screen bg-white px-6 md:px-20 py-16 font-[NeueHaas] text-black"
+      className="min-h-screen bg-white px-6 py-16 font-[NeueHaas] text-black md:px-20"
     >
-      {/* ================= HEADER ================= */}
-      <div className="max-w-2xl mt-10 mb-14">
-        <h1 className="text-[24px] md:text-[40px] leading-tight mb-4">
+      <div className="mt-10 mb-14 max-w-2xl">
+        <h1 className="mb-4 text-[24px] leading-tight md:text-[40px]">
           Become a Photographer Partner
         </h1>
 
-        <p className="text-[18px] md:text-[20px] leading-relaxed">
+        <p className="text-[18px] leading-relaxed md:text-[20px]">
           Join our platform and showcase your work to a wider audience. Fill in
           the details below to start your journey with us.
         </p>
       </div>
 
-      {/* ================= FORM ================= */}
-      <div className="grid md:grid-cols-2 gap-12">
-        {/* LEFT */}
+      <div className="grid gap-12 md:grid-cols-2">
         <div className="space-y-6">
           <Input
             label="Full Name"
-            value={form.name}
-            onChange={(v) => update("name", v)}
+            value={identity.name}
+            onChange={(value) => updateIdentity("name", value)}
+            readOnly
           />
           <Input
             label="Email"
-            value={form.email}
-            onChange={(v) => update("email", v)}
+            value={identity.email}
+            onChange={(value) => updateIdentity("email", value)}
+            readOnly
           />
           <Input
             label="WhatsApp Number"
-            value={form.phone}
-            onChange={(v) => update("phone", v)}
+            value={identity.phone}
+            onChange={(value) => updateIdentity("phone", value)}
+            placeholder="08xxxxxxxxxx"
           />
           <Input
             label="Location"
             value={form.location}
-            onChange={(v) => update("location", v)}
+            onChange={(value) => updateForm("location", value)}
           />
 
           <Select
             label="Category"
             value={form.category}
             options={["Wedding", "Prewedding", "Event", "Product", "Graduation"]}
-            onChange={(v) => update("category", v)}
+            onChange={(value) => updateForm("category", value)}
           />
 
           <Input
             label="Experience"
             placeholder="e.g. 2 years"
             value={form.experience}
-            onChange={(v) => update("experience", v)}
+            onChange={(value) => updateForm("experience", value)}
           />
 
           <Input
             label="Portfolio Link"
             value={form.portfolio}
-            onChange={(v) => update("portfolio", v)}
+            onChange={(value) => updateForm("portfolio", value)}
           />
 
           <Textarea
             label="About You"
             value={form.about}
-            onChange={(v) => update("about", v)}
+            onChange={(value) => updateForm("about", value)}
           />
 
-          {/* Message Display */}
           {message && (
             <div
-              className={`p-4 rounded-md text-[16px] ${
+              className={`rounded-md border p-4 text-[16px] ${
                 message.type === "success"
-                  ? "bg-green-100 text-green-700 border border-green-300"
-                  : "bg-red-100 text-red-700 border border-red-300"
+                  ? "border-green-300 bg-green-100 text-green-700"
+                  : "border-red-300 bg-red-100 text-red-700"
               }`}
             >
               {message.text}
@@ -183,22 +223,25 @@ export default function Partner() {
 
           <button
             onClick={handleSubmit}
-            disabled={loading}
-            className="bg-black text-white px-6 py-3 rounded-md text-[16px] hover:bg-black/80 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={loading || loadingIdentity}
+            className="rounded-md bg-black px-6 py-3 text-[16px] text-white transition hover:bg-black/80 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {loading ? "Mengirim..." : "Submit Application"}
+            {loadingIdentity
+              ? "Memuat akun..."
+              : loading
+                ? "Mengirim..."
+                : "Submit Application"}
           </button>
         </div>
 
-        {/* RIGHT PANEL */}
-        <div className="border border-black/10 p-8 rounded-md h-fit">
-          <h2 className="text-[20px] mb-4">Why Join Us?</h2>
+        <div className="h-fit rounded-md border border-black/10 p-8">
+          <h2 className="mb-4 text-[20px]">Why Join Us?</h2>
 
           <ul className="space-y-3 text-[16px]">
-            <li>• Get discovered by more clients</li>
-            <li>• Showcase your portfolio professionally</li>
-            <li>• Manage bookings easily</li>
-            <li>• Build your personal brand</li>
+            <li>Get discovered by more clients</li>
+            <li>Showcase your portfolio professionally</li>
+            <li>Manage bookings easily</li>
+            <li>Build your personal brand</li>
           </ul>
 
           <div className="mt-8">
@@ -213,18 +256,18 @@ export default function Partner() {
   );
 }
 
-/* ================= COMPONENT ================= */
-
 function Input({
   label,
   placeholder,
   value,
   onChange,
+  readOnly = false,
 }: {
   label: string;
   placeholder?: string;
   value: string;
   onChange: (val: string) => void;
+  readOnly?: boolean;
 }) {
   return (
     <div>
@@ -233,8 +276,13 @@ function Input({
         type="text"
         placeholder={placeholder}
         value={value}
+        readOnly={readOnly}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full border border-gray-300 px-4 py-3 rounded-md focus:outline-none focus:border-black"
+        className={`w-full rounded-md border px-4 py-3 focus:outline-none ${
+          readOnly
+            ? "border-gray-200 bg-gray-100 text-black/70"
+            : "border-gray-300 focus:border-black"
+        }`}
       />
     </div>
   );
@@ -255,7 +303,7 @@ function Textarea({
       <textarea
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full border border-gray-300 px-4 py-3 rounded-md min-h-[120px] focus:outline-none focus:border-black"
+        className="min-h-[120px] w-full rounded-md border border-gray-300 px-4 py-3 focus:border-black focus:outline-none"
       />
     </div>
   );
@@ -278,12 +326,12 @@ function Select({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full border border-gray-300 px-4 py-3 rounded-md focus:outline-none focus:border-black"
+        className="w-full rounded-md border border-gray-300 px-4 py-3 focus:border-black focus:outline-none"
       >
         <option value="">Select category</option>
-        {options.map((o) => (
-          <option key={o} value={o}>
-            {o}
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
           </option>
         ))}
       </select>

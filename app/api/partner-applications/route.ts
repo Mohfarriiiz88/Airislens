@@ -1,37 +1,45 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "@/lib/auth/session";
-import { createPartnerApplication, listPartnerApplications } from "@/lib/partner-applications";
 
-// ======================
-// POST (SUBMIT)
-// ======================
+import { findUserById, updateUserProfile } from "@/lib/auth/users";
+import { getServerSession } from "@/lib/auth/session";
+import {
+  createPartnerApplication,
+  listPartnerApplications,
+} from "@/lib/partner-applications";
+
 export async function POST(request: Request) {
   try {
     const session = await getServerSession();
-
-    console.log("SESSION:", session);
 
     if (!session) {
       return NextResponse.json({ message: "Unauthorized." }, { status: 401 });
     }
 
-    const body = await request.json();
+    const userId = Number((session as { sub?: string }).sub);
 
-    const {
-      name,
-      email,
-      phone,
-      location,
-      category,
-      experience,
-      portfolioLink,
-      aboutYou,
-    } = body;
+    if (!userId) {
+      return NextResponse.json(
+        { message: "User ID tidak ditemukan." },
+        { status: 401 }
+      );
+    }
+
+    const body = (await request.json()) as {
+      phone?: string;
+      location?: string;
+      category?: string;
+      experience?: string;
+      portfolioLink?: string;
+      aboutYou?: string;
+    };
+
+    const location = body.location?.trim() ?? "";
+    const category = body.category?.trim() ?? "";
+    const experience = body.experience?.trim() ?? "";
+    const portfolioLink = body.portfolioLink?.trim() ?? "";
+    const aboutYou = body.aboutYou?.trim() ?? "";
 
     if (
-      !name ||
-      !email ||
-      !phone ||
       !location ||
       !category ||
       !experience ||
@@ -39,35 +47,50 @@ export async function POST(request: Request) {
       !aboutYou
     ) {
       return NextResponse.json(
-        { message: "Semua field harus diisi." },
+        { message: "Semua field partner harus diisi." },
         { status: 400 }
       );
     }
 
-    // 🔥 FIX FINAL (SESION KAMU PAKAI sub)
-    const userId = Number((session as any).sub);
+    const user = await findUserById(userId);
 
-    if (!userId) {
-      console.log("SESSION ERROR:", session);
+    if (!user) {
       return NextResponse.json(
-        { message: "User ID tidak ditemukan." },
-        { status: 401 }
+        { message: "User tidak ditemukan." },
+        { status: 404 }
       );
+    }
+
+    const normalizedPhone = String(body.phone ?? user.phone ?? "").trim();
+
+    if (!normalizedPhone) {
+      return NextResponse.json(
+        {
+          message:
+            "Nomor WhatsApp wajib diisi. Lengkapi dari form ini atau halaman profil.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (normalizedPhone !== (user.phone ?? "")) {
+      await updateUserProfile({
+        id: userId,
+        name: user.name,
+        email: user.email,
+        phone: normalizedPhone,
+      });
     }
 
     const application = await createPartnerApplication(
       {
-        name,
-        email,
-        phone,
         location,
         category,
         experience,
         portfolioLink,
         aboutYou,
-        submittedByUserId: userId, // tidak dipakai di insert tapi tetap aman
       },
-      userId // 🔥 ini yang dipakai oleh DB
+      userId
     );
 
     return NextResponse.json(
@@ -80,9 +103,6 @@ export async function POST(request: Request) {
   }
 }
 
-// ======================
-// GET (SUPERADMIN)
-// ======================
 export async function GET(request: Request) {
   try {
     const session = await getServerSession();
@@ -93,7 +113,6 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");
-
     const applications = await listPartnerApplications(status || undefined);
 
     return NextResponse.json({ applications });

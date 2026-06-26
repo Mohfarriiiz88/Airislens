@@ -11,6 +11,8 @@ const PROFILE_PHOTO_PLACEHOLDERS = [
   "/svg/fg4.svg",
 ];
 
+export type PartnerType = "individual" | "studio";
+
 type PartnerProfileRow = RowDataPacket & {
   user_id: number;
   email: string;
@@ -20,6 +22,12 @@ type PartnerProfileRow = RowDataPacket & {
   specializations_json: string;
   address: string;
   whatsapp: string;
+  latitude: number | null;
+  longitude: number | null;
+  free_distance_km: number;
+  transport_fee_per_km: number;
+  partner_type: PartnerType;
+  team_quota: number;
   instagram: string;
   tiktok: string;
   facebook: string;
@@ -59,6 +67,12 @@ export type AdminPartnerProfile = {
   specializations: string[];
   address: string;
   whatsapp: string;
+  latitude: number | null;
+  longitude: number | null;
+  freeDistanceKm: number;
+  transportFeePerKm: number;
+  partnerType: PartnerType;
+  teamQuota: number;
   instagram: string;
   tiktok: string;
   facebook: string;
@@ -118,6 +132,18 @@ export type PublicPartnerKnowledge = {
   packages: PartnerPackage[];
 };
 
+export type PartnerBookingProfile = {
+  userId: number;
+  brandName: string;
+  address: string;
+  latitude: number | null;
+  longitude: number | null;
+  freeDistanceKm: number;
+  transportFeePerKm: number;
+  partnerType: PartnerType;
+  teamQuota: number;
+};
+
 declare global {
   var __airislensPartnerCmsReady: Promise<void> | undefined;
 }
@@ -140,6 +166,20 @@ function stringifySpecializations(values: string[]) {
   return JSON.stringify(values.filter(Boolean));
 }
 
+function normalizePartnerType(value: string | null | undefined): PartnerType {
+  return value === "studio" ? "studio" : "individual";
+}
+
+function normalizeTeamQuota(value: number | null | undefined) {
+  const numericValue = Number(value);
+
+  if (!Number.isInteger(numericValue) || numericValue < 1) {
+    return 1;
+  }
+
+  return numericValue;
+}
+
 function normalizeProfileRow(row: PartnerProfileRow): AdminPartnerProfile {
   return {
     userId: row.user_id,
@@ -150,6 +190,12 @@ function normalizeProfileRow(row: PartnerProfileRow): AdminPartnerProfile {
     specializations: parseSpecializations(row.specializations_json),
     address: row.address,
     whatsapp: row.whatsapp,
+    latitude: row.latitude === null ? null : Number(row.latitude),
+    longitude: row.longitude === null ? null : Number(row.longitude),
+    freeDistanceKm: Number(row.free_distance_km ?? 5),
+    transportFeePerKm: Number(row.transport_fee_per_km ?? 3000),
+    partnerType: normalizePartnerType(row.partner_type),
+    teamQuota: normalizeTeamQuota(row.team_quota),
     instagram: row.instagram,
     tiktok: row.tiktok,
     facebook: row.facebook,
@@ -205,6 +251,12 @@ async function ensureSchemaInternal() {
       specializations_json TEXT NOT NULL,
       address TEXT NOT NULL,
       whatsapp VARCHAR(30) NOT NULL,
+      latitude DECIMAL(10,8) NULL,
+      longitude DECIMAL(11,8) NULL,
+      free_distance_km DECIMAL(8,2) NOT NULL DEFAULT 5.00,
+      transport_fee_per_km BIGINT UNSIGNED NOT NULL DEFAULT 3000,
+      partner_type ENUM('individual', 'studio') NOT NULL DEFAULT 'individual',
+      team_quota INT UNSIGNED NOT NULL DEFAULT 1,
       instagram VARCHAR(191) NOT NULL DEFAULT '',
       tiktok VARCHAR(191) NOT NULL DEFAULT '',
       facebook VARCHAR(191) NOT NULL DEFAULT '',
@@ -216,6 +268,60 @@ async function ensureSchemaInternal() {
       UNIQUE KEY partner_profiles_slug_unique (slug)
     )
   `);
+
+  const partnerProfileColumns = [
+    {
+      name: "latitude",
+      definition: "DECIMAL(10,8) NULL AFTER whatsapp",
+    },
+    {
+      name: "longitude",
+      definition: "DECIMAL(11,8) NULL AFTER latitude",
+    },
+    {
+      name: "free_distance_km",
+      definition: "DECIMAL(8,2) NOT NULL DEFAULT 5.00 AFTER longitude",
+    },
+    {
+      name: "transport_fee_per_km",
+      definition:
+        "BIGINT UNSIGNED NOT NULL DEFAULT 3000 AFTER free_distance_km",
+    },
+    {
+      name: "partner_type",
+      definition:
+        "ENUM('individual', 'studio') NOT NULL DEFAULT 'individual' AFTER transport_fee_per_km",
+    },
+    {
+      name: "team_quota",
+      definition: "INT UNSIGNED NOT NULL DEFAULT 1 AFTER partner_type",
+    },
+    {
+      name: "commission_rate",
+      definition: "DECIMAL(5,2) NOT NULL DEFAULT 10.00 AFTER team_quota",
+    },
+  ] as const;
+
+  for (const column of partnerProfileColumns) {
+    const [rows] = await pool.execute<(RowDataPacket & { COLUMN_NAME: string })[]>(
+      `
+        SELECT COLUMN_NAME
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'partner_profiles'
+          AND COLUMN_NAME = ?
+        LIMIT 1
+      `,
+      [column.name]
+    );
+
+    if (rows.length === 0) {
+      await pool.execute(`
+        ALTER TABLE partner_profiles
+        ADD COLUMN ${column.name} ${column.definition}
+      `);
+    }
+  }
 
   await pool.execute(`
     CREATE TABLE IF NOT EXISTS partner_gallery_items (
@@ -286,13 +392,15 @@ async function ensurePartnerProfileForAdminUser(user: AdminUserRow) {
         specializations_json,
         address,
         whatsapp,
+        partner_type,
+        team_quota,
         instagram,
         tiktok,
         facebook,
         website,
         profile_photo_url
       )
-      VALUES (?, ?, ?, '', '[]', '', '', '', '', '', '', '')
+      VALUES (?, ?, ?, '', '[]', '', '', 'individual', 1, '', '', '', '', '')
     `,
     [user.id, slug, user.name]
   );
@@ -355,6 +463,12 @@ export async function getAdminPartnerProfile(userId: number) {
         p.specializations_json,
         p.address,
         p.whatsapp,
+        p.latitude,
+        p.longitude,
+        p.free_distance_km,
+        p.transport_fee_per_km,
+        p.partner_type,
+        p.team_quota,
         p.instagram,
         p.tiktok,
         p.facebook,
@@ -390,6 +504,9 @@ export async function upsertAdminPartnerProfile(
   const currentProfile = await getAdminPartnerProfile(userId);
   const slug = await generateUniqueSlug(input.brandName || adminUser.name, userId);
   const pool = getDbPool();
+  const partnerType = normalizePartnerType(input.partnerType);
+  const teamQuota =
+    partnerType === "individual" ? 1 : normalizeTeamQuota(input.teamQuota);
 
   await pool.execute(
     `
@@ -401,6 +518,12 @@ export async function upsertAdminPartnerProfile(
         specializations_json = ?,
         address = ?,
         whatsapp = ?,
+        latitude = ?,
+        longitude = ?,
+        free_distance_km = ?,
+        transport_fee_per_km = ?,
+        partner_type = ?,
+        team_quota = ?,
         instagram = ?,
         tiktok = ?,
         facebook = ?,
@@ -416,6 +539,12 @@ export async function upsertAdminPartnerProfile(
       stringifySpecializations(input.specializations),
       input.address,
       input.whatsapp,
+      input.latitude,
+      input.longitude,
+      input.freeDistanceKm,
+      input.transportFeePerKm,
+      partnerType,
+      teamQuota,
       input.instagram,
       input.tiktok,
       input.facebook,
@@ -434,12 +563,72 @@ export async function upsertAdminPartnerProfile(
     specializations: input.specializations,
     address: input.address,
     whatsapp: input.whatsapp,
+    latitude: input.latitude,
+    longitude: input.longitude,
+    freeDistanceKm: input.freeDistanceKm,
+    transportFeePerKm: input.transportFeePerKm,
+    partnerType,
+    teamQuota,
     instagram: input.instagram,
     tiktok: input.tiktok,
     facebook: input.facebook,
     website: input.website,
     profilePhotoUrl: input.profilePhotoUrl || currentProfile?.profilePhotoUrl || "",
   };
+}
+
+export async function getPartnerBookingProfile(userId: number) {
+  await ensurePartnerProfilesForAdmins();
+
+  const pool = getDbPool();
+  const [rows] = await pool.execute<PartnerProfileRow[]>(
+    `
+      SELECT
+        p.user_id,
+        u.email,
+        p.brand_name,
+        p.slug,
+        p.description,
+        p.specializations_json,
+        p.address,
+        p.whatsapp,
+        p.latitude,
+        p.longitude,
+        p.free_distance_km,
+        p.transport_fee_per_km,
+        p.partner_type,
+        p.team_quota,
+        p.instagram,
+        p.tiktok,
+        p.facebook,
+        p.website,
+        p.profile_photo_url
+      FROM partner_profiles p
+      INNER JOIN users u ON u.id = p.user_id
+      WHERE u.role = 'admin'
+        AND p.user_id = ?
+      LIMIT 1
+    `,
+    [userId]
+  );
+
+  const row = rows[0];
+
+  if (!row) {
+    return null;
+  }
+
+  return {
+    userId: row.user_id,
+    brandName: row.brand_name,
+    address: row.address,
+    latitude: row.latitude === null ? null : Number(row.latitude),
+    longitude: row.longitude === null ? null : Number(row.longitude),
+    freeDistanceKm: Number(row.free_distance_km ?? 5),
+    transportFeePerKm: Number(row.transport_fee_per_km ?? 3000),
+    partnerType: normalizePartnerType(row.partner_type),
+    teamQuota: normalizeTeamQuota(row.team_quota),
+  } satisfies PartnerBookingProfile;
 }
 
 export async function listPartnerGalleryItems(userId: number) {

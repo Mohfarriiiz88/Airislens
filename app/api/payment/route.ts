@@ -1,10 +1,14 @@
 import midtransClient from "midtrans-client";
 import { NextResponse } from "next/server";
 
-import { createBooking } from "@/lib/bookings";
+import { BookingPricingError, getBookingQuote } from "@/lib/booking-pricing";
+import { BookingSlotUnavailableError, createBooking } from "@/lib/bookings";
 import { getServerSession } from "@/lib/auth/session";
-import { getJwtSecret } from "@/lib/env";
+import { getDbPool } from "@/lib/db";
+import { getJwtSecret, getMidtransConfig } from "@/lib/env";
+import { createPayment } from "@/lib/payments";
 import { isTimeSlotUnavailable } from "@/lib/schedules";
+import { createBookingSettlement } from "@/lib/settlements";
 import { normalizeIndonesianPhoneNumber } from "@/lib/whatsapp";
 
 export const runtime = "nodejs";
@@ -21,6 +25,9 @@ type PaymentRequestBody = {
   date?: string;
   time?: string;
   location?: string;
+  eventAddress?: string;
+  eventLatitude?: number;
+  eventLongitude?: number;
   note?: string;
 };
 
@@ -28,23 +35,22 @@ export async function POST(req: Request) {
   try {
     const session = await getServerSession();
     const body = (await req.json()) as PaymentRequestBody;
-    const amount = Number(body.amount);
     const photographerId = Number(body.photographerId);
+    const packageId = Number(body.packageId);
     const customerUserId =
       session?.role === "user" ? Number(session.sub) : null;
 
     if (
       !body.name ||
       !body.phone ||
-      !Number.isFinite(amount) ||
-      amount <= 0 ||
-      !body.package ||
       !body.date ||
       !body.time ||
       !DATE_PATTERN.test(body.date) ||
       !TIME_PATTERN.test(body.time) ||
       !Number.isInteger(photographerId) ||
-      photographerId <= 0
+      photographerId <= 0 ||
+      !Number.isInteger(packageId) ||
+      packageId <= 0
     ) {
       return NextResponse.json({ error: "Invalid input" }, { status: 400 });
     }
@@ -72,9 +78,18 @@ export async function POST(req: Request) {
       );
     }
 
+    const quote = await getBookingQuote({
+      photographerUserId: photographerId,
+      packageId,
+      eventAddress: body.eventAddress ?? body.location ?? "",
+      eventLatitude: Number(body.eventLatitude),
+      eventLongitude: Number(body.eventLongitude),
+    });
+    const midtrans = getMidtransConfig();
+
     const snap = new midtransClient.Snap({
-      isProduction: false,
-      serverKey: process.env.MIDTRANS_SERVER_KEY!,
+      isProduction: midtrans.isProduction,
+      serverKey: midtrans.serverKey,
     });
 
     const orderId = "AIRIS-" + Date.now();
@@ -82,7 +97,7 @@ export async function POST(req: Request) {
     const parameter = {
       transaction_details: {
         order_id: orderId,
-        gross_amount: amount,
+        gross_amount: quote.totalPrice,
       },
       customer_details: {
         first_name: body.name,
@@ -92,21 +107,76 @@ export async function POST(req: Request) {
 
     const transaction = await snap.createTransaction(parameter);
 
-    await createBooking({
-      orderId,
-      photographerUserId: photographerId,
-      customerUserId,
-      packageId: body.packageId,
-      customerName: body.name,
-      customerPhone: normalizedCustomerPhone,
-      packageName: body.package,
-      amount,
-      bookingDate: body.date,
-      bookingTime: body.time,
-      location: body.location || "",
-      note: body.note || "",
-      status: "Pending",
-    });
+    const pool = getDbPool();
+    const connection = await pool.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      const bookingId = await createBooking(
+        {
+          orderId,
+          photographerUserId: photographerId,
+          customerUserId,
+          packageId: quote.packageId,
+          customerName: body.name,
+          customerPhone: normalizedCustomerPhone,
+          packageName: quote.packageName,
+          amount: quote.totalPrice,
+          bookingDate: body.date,
+          bookingTime: body.time,
+          location: quote.eventAddress,
+          eventAddress: quote.eventAddress,
+          eventLatitude: quote.eventLatitude,
+          eventLongitude: quote.eventLongitude,
+          distanceKm: quote.distanceKm,
+          transportFee: quote.transportFee,
+          packagePrice: quote.packagePrice,
+          totalPrice: quote.totalPrice,
+          note: body.note || "",
+          status: "Pending",
+        },
+        connection
+      );
+
+      await createPayment(
+        {
+          bookingId,
+          orderId,
+          grossAmount: quote.totalPrice,
+          gateway: "midtrans",
+          currency: "IDR",
+          status: "pending",
+          payloadJson: {
+            snapRequest: parameter,
+            snapResponse: {
+              token: transaction.token,
+              redirectUrl: transaction.redirect_url,
+            },
+          },
+        },
+        connection
+      );
+
+      await createBookingSettlement(
+        {
+          bookingId,
+          photographerUserId: photographerId,
+          grossAmount: quote.totalPrice,
+          packagePrice: quote.packagePrice ?? quote.totalPrice,
+          transportFee: quote.transportFee,
+          notes: "Settlement dibuat saat checkout booking.",
+        },
+        connection
+      );
+
+      await connection.commit();
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
 
     try {
       const notificationResponse = await fetch(
@@ -120,10 +190,10 @@ export async function POST(req: Request) {
           body: JSON.stringify({
             customerName: body.name,
             customerPhone: normalizedCustomerPhone,
-            packageName: body.package,
+            packageName: quote.packageName,
             date: body.date,
             time: body.time,
-            location: body.location || "",
+            location: quote.eventAddress,
             note: body.note || "",
           }),
           cache: "no-store",
@@ -148,8 +218,23 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       token: transaction.token,
+      breakdown: quote,
     });
   } catch (error) {
+    if (error instanceof BookingSlotUnavailableError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 409 }
+      );
+    }
+
+    if (error instanceof BookingPricingError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: error.status }
+      );
+    }
+
     console.error("MIDTRANS ERROR:", error);
 
     return NextResponse.json(

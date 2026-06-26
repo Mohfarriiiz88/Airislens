@@ -22,6 +22,13 @@ export function getJwtSecret() {
   return getRequiredEnv("JWT_SECRET");
 }
 
+export function getMidtransConfig() {
+  return {
+    serverKey: getRequiredEnv("MIDTRANS_SERVER_KEY").trim(),
+    isProduction: process.env.MIDTRANS_IS_PRODUCTION?.trim() === "true",
+  };
+}
+
 export function getFonnteConfig() {
   return {
     token: getRequiredEnv("FONNTE_TOKEN").trim(),

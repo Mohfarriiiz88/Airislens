@@ -1,12 +1,17 @@
 Project AirisLens {
   database_type: "MySQL"
-  Note: "Schema DBML untuk dipakai di dbdiagram.io. Relasi di bawah merepresentasikan relasi logis aplikasi; sebagian belum dideklarasikan sebagai FOREIGN KEY di SQL runtime."
+  Note: "Schema DBML target akhir AirisLens dengan arsitektur escrow. Foreign key dasar sudah diterapkan ke database live; migration finance foundation ada di database/migrations/2026-06-25_03_add_finance_foundation.sql."
 }
 
 Enum user_role {
   superadmin
   admin
   user
+}
+
+Enum partner_type {
+  individual
+  studio
 }
 
 Enum partner_application_status {
@@ -16,16 +21,83 @@ Enum partner_application_status {
 }
 
 Enum booking_status {
-  pending
+  pending_payment
   confirmed
+  in_progress
+  awaiting_confirmation
   completed
   cancelled
+  disputed
+  refunded
+}
+
+Enum payment_status {
+  created
+  pending
+  paid
+  failed
+  expired
+  cancelled
+  refunded
+  partial_refunded
+  chargeback
+}
+
+Enum escrow_status {
+  unpaid
+  held
+  ready_to_release
+  released
+  refunded
+  partial_refunded
+  on_hold_dispute
+}
+
+Enum withdrawal_status {
+  pending
+  approved
+  processing
+  paid
+  rejected
+  failed
+  cancelled
+}
+
+Enum wallet_transaction_type {
+  escrow_release
+  withdrawal_hold
+  withdrawal_paid
+  withdrawal_rejected_return
+  refund_adjustment
+  manual_adjustment_credit
+  manual_adjustment_debit
+}
+
+Enum wallet_transaction_direction {
+  credit
+  debit
+}
+
+Enum dispute_type {
+  complaint
+  refund_request
+  partial_refund
+}
+
+Enum dispute_status {
+  open
+  reviewing
+  resolved_refund
+  resolved_partial_refund
+  resolved_release
+  rejected
 }
 
 Table users {
   id bigint [pk, increment, not null]
   name varchar(100) [not null]
   email varchar(191) [not null]
+  phone varchar(20) [null]
   password_hash text [not null]
   role user_role [not null, default: 'user']
   superadmin_slot tinyint [note: "Generated column in MySQL: 1 when role = 'superadmin', else NULL"]
@@ -46,6 +118,13 @@ Table partner_profiles {
   specializations_json text [not null, note: "JSON string array of specializations"]
   address text [not null]
   whatsapp varchar(30) [not null]
+  latitude decimal(10,8) [null]
+  longitude decimal(11,8) [null]
+  free_distance_km decimal(8,2) [not null, default: 5.00]
+  transport_fee_per_km bigint [not null, default: 3000]
+  partner_type partner_type [not null, default: 'individual']
+  team_quota int [not null, default: 1]
+  commission_rate decimal(5,2) [not null, default: 10.00]
   instagram varchar(191) [not null, default: '']
   tiktok varchar(191) [not null, default: '']
   facebook varchar(191) [not null, default: '']
@@ -108,21 +187,17 @@ Table partner_schedules {
 
 Table partner_applications {
   id bigint [pk, increment, not null]
-  name varchar(100) [not null]
-  email varchar(191) [not null]
-  phone varchar(30) [not null]
   location varchar(100) [not null]
   category varchar(100) [not null]
   experience varchar(100) [not null]
   portfolio_link varchar(255) [not null]
   about_you text [not null]
   status partner_application_status [not null, default: 'pending']
-  submitted_by_user_id bigint [null]
+  submitted_by_user_id bigint [not null]
   created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
   updated_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
 
   Indexes {
-    email [name: "partner_applications_email_idx"]
     status [name: "partner_applications_status_idx"]
     submitted_by_user_id [name: "partner_applications_user_id_idx"]
   }
@@ -141,8 +216,19 @@ Table bookings {
   booking_date date [not null]
   booking_time varchar(10) [not null]
   location text [not null]
+  event_address text [null]
+  event_latitude decimal(10,8) [null]
+  event_longitude decimal(11,8) [null]
+  distance_km decimal(8,2) [not null, default: 0]
+  transport_fee bigint [not null, default: 0]
+  package_price bigint [null]
+  total_price bigint [null]
   note text [not null]
-  status booking_status [not null, default: 'pending']
+  status booking_status [not null, default: 'pending_payment']
+  service_completed_at timestamp [null]
+  customer_confirmed_at timestamp [null]
+  cancelled_at timestamp [null]
+  cancel_reason text [null]
   created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
   updated_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
 
@@ -152,6 +238,154 @@ Table bookings {
     customer_user_id [name: "bookings_customer_user_id_idx"]
     booking_date [name: "bookings_booking_date_idx"]
     status [name: "bookings_status_idx"]
+  }
+}
+
+Table payments {
+  id bigint [pk, increment, not null]
+  booking_id bigint [not null, unique]
+  order_id varchar(64) [not null, unique]
+  gateway varchar(32) [not null, default: 'midtrans']
+  gateway_transaction_id varchar(128) [null]
+  gross_amount bigint [not null]
+  currency varchar(8) [not null, default: 'IDR']
+  payment_method varchar(64) [null]
+  status payment_status [not null, default: 'created']
+  gateway_status_raw varchar(64) [null]
+  refunded_amount bigint [not null, default: 0]
+  payload_json text [null]
+  paid_at timestamp [null]
+  expired_at timestamp [null]
+  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    booking_id [name: "payments_booking_id_unique", unique]
+    order_id [name: "payments_order_id_unique", unique]
+    gateway_transaction_id [name: "payments_gateway_transaction_id_idx"]
+    status [name: "payments_status_idx"]
+  }
+}
+
+Table payment_events {
+  id bigint [pk, increment, not null]
+  payment_id bigint [not null]
+  event_type varchar(64) [not null]
+  gateway_status varchar(64) [null]
+  signature_valid boolean [not null, default: true]
+  payload_json text [not null]
+  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    payment_id [name: "payment_events_payment_id_idx"]
+    event_type [name: "payment_events_event_type_idx"]
+    created_at [name: "payment_events_created_at_idx"]
+  }
+}
+
+Table booking_settlements {
+  id bigint [pk, increment, not null]
+  booking_id bigint [not null, unique]
+  photographer_user_id bigint [not null]
+  gross_amount bigint [not null]
+  package_price bigint [not null, default: 0]
+  transport_fee bigint [not null, default: 0]
+  commission_rate decimal(5,2) [not null]
+  commission_amount bigint [not null, default: 0]
+  net_partner_amount bigint [not null, default: 0]
+  status escrow_status [not null, default: 'unpaid']
+  held_at timestamp [null]
+  ready_to_release_at timestamp [null]
+  released_at timestamp [null]
+  refunded_at timestamp [null]
+  released_wallet_transaction_id bigint [null]
+  notes text [null]
+  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    booking_id [name: "booking_settlements_booking_id_unique", unique]
+    photographer_user_id [name: "booking_settlements_photographer_user_id_idx"]
+    status [name: "booking_settlements_status_idx"]
+    released_wallet_transaction_id [name: "booking_settlements_released_wallet_tx_idx"]
+  }
+}
+
+Table partner_wallets {
+  user_id bigint [pk, not null]
+  available_balance bigint [not null, default: 0]
+  pending_withdrawal_balance bigint [not null, default: 0]
+  total_earned bigint [not null, default: 0]
+  total_withdrawn bigint [not null, default: 0]
+  updated_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+}
+
+Table withdrawal_requests {
+  id bigint [pk, increment, not null]
+  partner_user_id bigint [not null]
+  requested_amount bigint [not null]
+  bank_name varchar(100) [not null]
+  account_name varchar(100) [not null]
+  account_number varchar(50) [not null]
+  status withdrawal_status [not null, default: 'pending']
+  requested_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  reviewed_at timestamp [null]
+  paid_at timestamp [null]
+  reviewed_by_user_id bigint [null]
+  transfer_reference varchar(100) [null]
+  admin_note text [null]
+  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    partner_user_id [name: "withdrawal_requests_partner_user_id_idx"]
+    reviewed_by_user_id [name: "withdrawal_requests_reviewed_by_user_id_idx"]
+    status [name: "withdrawal_requests_status_idx"]
+    requested_at [name: "withdrawal_requests_requested_at_idx"]
+  }
+}
+
+Table wallet_transactions {
+  id bigint [pk, increment, not null]
+  wallet_user_id bigint [not null]
+  booking_id bigint [null]
+  withdrawal_request_id bigint [null]
+  type wallet_transaction_type [not null]
+  direction wallet_transaction_direction [not null]
+  amount bigint [not null]
+  balance_before bigint [not null]
+  balance_after bigint [not null]
+  reference_code varchar(64) [null]
+  description text [not null]
+  created_by_user_id bigint [null]
+  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    wallet_user_id [name: "wallet_transactions_wallet_user_id_idx"]
+    booking_id [name: "wallet_transactions_booking_id_idx"]
+    withdrawal_request_id [name: "wallet_transactions_withdrawal_request_id_idx"]
+    type [name: "wallet_transactions_type_idx"]
+    created_at [name: "wallet_transactions_created_at_idx"]
+  }
+}
+
+Table booking_disputes {
+  id bigint [pk, increment, not null]
+  booking_id bigint [not null]
+  opened_by_user_id bigint [not null]
+  type dispute_type [not null]
+  reason text [not null]
+  status dispute_status [not null, default: 'open']
+  resolution text [null]
+  resolved_by_user_id bigint [null]
+  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  resolved_at timestamp [null]
+
+  Indexes {
+    booking_id [name: "booking_disputes_booking_id_idx"]
+    opened_by_user_id [name: "booking_disputes_opened_by_user_id_idx"]
+    resolved_by_user_id [name: "booking_disputes_resolved_by_user_id_idx"]
+    status [name: "booking_disputes_status_idx"]
   }
 }
 
@@ -177,4 +411,19 @@ Ref: partner_applications.submitted_by_user_id > users.id
 Ref: bookings.photographer_user_id > users.id
 Ref: bookings.customer_user_id > users.id
 Ref: bookings.package_id > partner_packages.id
+Ref: payments.booking_id > bookings.id
+Ref: payment_events.payment_id > payments.id
+Ref: booking_settlements.booking_id > bookings.id
+Ref: booking_settlements.photographer_user_id > users.id
+Ref: booking_settlements.released_wallet_transaction_id > wallet_transactions.id
+Ref: partner_wallets.user_id > users.id
+Ref: withdrawal_requests.partner_user_id > users.id
+Ref: withdrawal_requests.reviewed_by_user_id > users.id
+Ref: wallet_transactions.wallet_user_id > partner_wallets.user_id
+Ref: wallet_transactions.booking_id > bookings.id
+Ref: wallet_transactions.withdrawal_request_id > withdrawal_requests.id
+Ref: wallet_transactions.created_by_user_id > users.id
+Ref: booking_disputes.booking_id > bookings.id
+Ref: booking_disputes.opened_by_user_id > users.id
+Ref: booking_disputes.resolved_by_user_id > users.id
 Ref: admin_notification_tokens.user_id > users.id

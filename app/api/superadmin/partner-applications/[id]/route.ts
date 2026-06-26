@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
+
 import { getServerSession } from "@/lib/auth/session";
+import { updateUserRole } from "@/lib/auth/users";
 import {
   getPartnerApplicationById,
   updatePartnerApplicationStatus,
 } from "@/lib/partner-applications";
-import { updateUserRole } from "@/lib/auth/users";
 
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession();
@@ -17,11 +18,12 @@ export async function PATCH(
       return NextResponse.json({ message: "Unauthorized." }, { status: 401 });
     }
 
-    const id = Number(params.id);
-    const body = await request.json();
+    const { id: rawId } = await context.params;
+    const id = Number(rawId);
+    const body = (await request.json()) as { status?: string };
     const status = body.status;
 
-    if (!["approved", "rejected"].includes(status)) {
+    if (!["approved", "rejected"].includes(String(status))) {
       return NextResponse.json(
         { message: "Status tidak valid." },
         { status: 400 }
@@ -37,20 +39,11 @@ export async function PATCH(
       );
     }
 
-    // 🔥 UPDATE STATUS
-    await updatePartnerApplicationStatus(id, status);
+    await updatePartnerApplicationStatus(id, status as "approved" | "rejected");
 
-    // 🔥 INI KUNCI UTAMA
     if (status === "approved") {
-      if (!application.submittedByUserId) {
-        return NextResponse.json(
-          { message: "User ID tidak ditemukan di application." },
-          { status: 400 }
-        );
-      }
-
       await updateUserRole({
-        id: application.submittedByUserId, // 🔥 HARUS id
+        id: application.submittedByUserId,
         role: "admin",
       });
     }

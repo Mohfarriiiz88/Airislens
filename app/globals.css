@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
 
 @font-face {
   font-family: "NeueHaas";
@@ -23,21 +24,17 @@
     BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-    --color-background: var(--background);
-    --color-foreground: var(--foreground);
-  }
+  color-scheme: light;
 }
 
 html,
 body {
   width: 100%;
   overflow-x: hidden;
+}
+
+html {
+  color-scheme: light;
 }
 
 body {
@@ -53,6 +50,20 @@ body {
 body::-webkit-scrollbar {
   width: 0;
   height: 0;
+}
+
+input,
+textarea,
+select {
+  background-color: #ffffff;
+  color: #131313;
+  color-scheme: light;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #6b7280;
+  opacity: 1;
 }
 
 .font-primary {
@@ -84,6 +95,20 @@ body::-webkit-scrollbar {
 
 .airis-chatbot-dots span:nth-child(3) {
   animation-delay: 0.3s;
+}
+
+.booking-location-map .leaflet-control-attribution,
+.booking-location-map .leaflet-control-zoom {
+  font-family: var(--font-primary);
+}
+
+.booking-location-map .leaflet-control-attribution {
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(6px);
+}
+
+.booking-location-map .leaflet-control-zoom a {
+  color: #171717;
 }
 
 @keyframes airis-chatbot-bounce {

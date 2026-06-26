@@ -1,19 +1,24 @@
-import { type AdminBookingStatus } from "@/lib/bookings";
+import {
+  getBookingLifecycleLabel,
+  type BookingLifecycleStatus,
+} from "@/lib/bookings.shared";
 
 type AnalyticsPlaceholderProps = {
-  statusBreakdown: Record<AdminBookingStatus, number>;
+  statusBreakdown: Record<BookingLifecycleStatus, number>;
 };
 
-const STATUS_ORDER: AdminBookingStatus[] = [
-  "Pending",
-  "Confirmed",
+const STATUS_ORDER: BookingLifecycleStatus[] = [
+  "AwaitingPayment",
+  "Scheduled",
+  "AwaitingCustomerConfirmation",
   "Completed",
   "Cancelled",
 ];
 
-const STATUS_COLORS: Record<AdminBookingStatus, string> = {
-  Pending: "bg-yellow-400",
-  Confirmed: "bg-blue-400",
+const STATUS_COLORS: Record<BookingLifecycleStatus, string> = {
+  AwaitingPayment: "bg-yellow-400",
+  Scheduled: "bg-blue-400",
+  AwaitingCustomerConfirmation: "bg-amber-500",
   Completed: "bg-green-500",
   Cancelled: "bg-red-400",
 };
@@ -44,7 +49,9 @@ export default function AnalyticsPlaceholder({
                 key={status}
                 className="rounded-xl border border-black/10 p-4"
               >
-                <div className="text-sm text-black/60">{status}</div>
+                <div className="text-sm text-black/60">
+                  {getBookingLifecycleLabel(status)}
+                </div>
                 <div className="mt-1 text-2xl font-medium text-black">
                   {statusBreakdown[status] || 0}
                 </div>
@@ -60,7 +67,7 @@ export default function AnalyticsPlaceholder({
               return (
                 <div key={status}>
                   <div className="mb-1 flex items-center justify-between text-xs text-black/60">
-                    <span>{status}</span>
+                    <span>{getBookingLifecycleLabel(status)}</span>
                     <span>{percentage.toFixed(0)}%</span>
                   </div>
                   <div className="h-2 rounded-full bg-black/10 overflow-hidden">

@@ -1,16 +1,38 @@
 import "server-only";
 
-import { type ResultSetHeader, type RowDataPacket } from "mysql2/promise";
+import {
+  type Pool,
+  type PoolConnection,
+  type ResultSetHeader,
+  type RowDataPacket,
+} from "mysql2/promise";
 
+import {
+  getBookingLifecycleLabel,
+  getBookingLifecycleStatus,
+  type AdminBooking,
+  type AdminBookingStatus,
+  type BookingCalendarItem,
+  type BookingDashboardSnapshot,
+  type UserBookingHistoryItem,
+} from "@/lib/bookings.shared";
 import { getDbPool } from "@/lib/db";
-
-export type AdminBookingStatus =
-  | "Pending"
-  | "Confirmed"
-  | "Completed"
-  | "Cancelled";
+export {
+  getBookingLifecycleLabel,
+  getBookingLifecycleStatus,
+} from "@/lib/bookings.shared";
+export type {
+  AdminBooking,
+  AdminBookingStatus,
+  BookingCalendarItem,
+  BookingDashboardSnapshot,
+  BookingLifecycleStatus,
+  UserBookingHistoryItem,
+} from "@/lib/bookings.shared";
 
 type BookingStatusDb = "pending" | "confirmed" | "completed" | "cancelled";
+
+type DbExecutor = Pool | PoolConnection;
 
 type BookingRow = RowDataPacket & {
   id: number;
@@ -25,8 +47,19 @@ type BookingRow = RowDataPacket & {
   booking_date: string;
   booking_time: string;
   location: string;
+  event_address: string | null;
+  event_latitude: number | null;
+  event_longitude: number | null;
+  distance_km: number;
+  transport_fee: number;
+  package_price: number | null;
+  total_price: number | null;
   note: string;
   status: BookingStatusDb;
+  service_completed_at?: Date | string | null;
+  customer_confirmed_at?: Date | string | null;
+  cancelled_at?: Date | string | null;
+  cancel_reason?: string | null;
   created_at: Date | string;
 };
 
@@ -35,25 +68,7 @@ declare global {
   var __airislensBookingSchemaVersion: number | undefined;
 }
 
-const BOOKING_SCHEMA_VERSION = 2;
-
-export type AdminBooking = {
-  id: number;
-  orderId: string;
-  photographerUserId: number;
-  customerUserId: number | null;
-  packageId: number | null;
-  customerName: string;
-  customerPhone: string;
-  packageName: string;
-  amount: number;
-  bookingDate: string;
-  bookingTime: string;
-  location: string;
-  note: string;
-  status: AdminBookingStatus;
-  createdAt: string;
-};
+const BOOKING_SCHEMA_VERSION = 4;
 
 export type CreateBookingInput = {
   orderId: string;
@@ -67,41 +82,23 @@ export type CreateBookingInput = {
   bookingDate: string;
   bookingTime: string;
   location?: string;
+  eventAddress?: string;
+  eventLatitude?: number | null;
+  eventLongitude?: number | null;
+  distanceKm?: number;
+  transportFee?: number;
+  packagePrice?: number | null;
+  totalPrice?: number | null;
   note?: string;
   status?: AdminBookingStatus;
 };
 
-export type BookingDashboardSnapshot = {
-  totalBookings: number;
-  todayBookings: number;
-  monthBookings: number;
-  totalRevenue: number;
-  statusBreakdown: Record<AdminBookingStatus, number>;
-  recentBookings: AdminBooking[];
-  upcomingBookings: AdminBooking[];
-};
-
-export type UserBookingHistoryItem = {
-  id: number;
-  orderId: string;
-  photographerName: string;
-  bookingDate: string;
-  bookingTime: string;
-  amount: number;
-  location: string;
-  status: AdminBookingStatus;
-};
-
-export type BookingCalendarItem = {
-  id: number;
-  orderId: string;
-  customerName: string;
-  packageName: string;
-  bookingDate: string;
-  bookingTime: string;
-  location: string;
-  status: AdminBookingStatus;
-};
+export class BookingSlotUnavailableError extends Error {
+  constructor() {
+    super("Jadwal pada jam tersebut sudah tidak tersedia.");
+    this.name = "BookingSlotUnavailableError";
+  }
+}
 
 function mapStatusFromDb(status: BookingStatusDb): AdminBookingStatus {
   switch (status) {
@@ -131,11 +128,30 @@ function mapStatusToDb(status: AdminBookingStatus): BookingStatusDb {
   }
 }
 
+function getExecutor(connection?: PoolConnection) {
+  return (connection ?? getDbPool()) as DbExecutor;
+}
+
+function normalizeTimestamp(value: Date | string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+}
+
 function normalizeBooking(row: BookingRow): AdminBooking {
   const createdAt =
     row.created_at instanceof Date
       ? row.created_at.toISOString()
       : new Date(row.created_at).toISOString();
+  const serviceCompletedAt = normalizeTimestamp(row.service_completed_at);
+  const customerConfirmedAt = normalizeTimestamp(row.customer_confirmed_at);
+  const cancelledAt = normalizeTimestamp(row.cancelled_at);
+  const lifecycleStatus = getBookingLifecycleStatus({
+    status: mapStatusFromDb(row.status),
+    customerConfirmedAt,
+  });
 
   return {
     id: row.id,
@@ -150,8 +166,23 @@ function normalizeBooking(row: BookingRow): AdminBooking {
     bookingDate: row.booking_date,
     bookingTime: row.booking_time,
     location: row.location,
+    eventAddress: row.event_address,
+    eventLatitude:
+      row.event_latitude === null ? null : Number(row.event_latitude),
+    eventLongitude:
+      row.event_longitude === null ? null : Number(row.event_longitude),
+    distanceKm: Number(row.distance_km ?? 0),
+    transportFee: Number(row.transport_fee ?? 0),
+    packagePrice:
+      row.package_price === null ? null : Number(row.package_price),
+    totalPrice: row.total_price === null ? null : Number(row.total_price),
     note: row.note,
     status: mapStatusFromDb(row.status),
+    lifecycleStatus,
+    lifecycleStatusLabel: getBookingLifecycleLabel(lifecycleStatus),
+    serviceCompletedAt,
+    customerConfirmedAt,
+    cancelledAt,
     createdAt,
   };
 }
@@ -167,6 +198,64 @@ function getTodayDateString() {
 
 function getCurrentMonthPrefix() {
   return getTodayDateString().slice(0, 7);
+}
+
+async function lockPartnerQuota(
+  connection: PoolConnection,
+  photographerUserId: number
+) {
+  const [profileRows] = await connection.execute<
+    (RowDataPacket & { team_quota: number | null })[]
+  >(
+    `
+      SELECT team_quota
+      FROM partner_profiles
+      WHERE user_id = ?
+      LIMIT 1
+      FOR UPDATE
+    `,
+    [photographerUserId]
+  );
+
+  if (profileRows.length === 0) {
+    await connection.execute(
+      `
+        SELECT id
+        FROM users
+        WHERE id = ?
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [photographerUserId]
+    );
+  }
+
+  const quota = Number(profileRows[0]?.team_quota ?? 1);
+  return Number.isInteger(quota) && quota > 0 ? quota : 1;
+}
+
+async function countActiveBookingsForUpdate(
+  connection: PoolConnection,
+  photographerUserId: number,
+  bookingDate: string,
+  bookingTime: string
+) {
+  const [rows] = await connection.execute<
+    (RowDataPacket & { id: number })[]
+  >(
+    `
+      SELECT id
+      FROM bookings
+      WHERE photographer_user_id = ?
+        AND booking_date = ?
+        AND booking_time = ?
+        AND status <> 'cancelled'
+      FOR UPDATE
+    `,
+    [photographerUserId, bookingDate, bookingTime]
+  );
+
+  return rows.length;
 }
 
 async function ensureBookingSchemaInternal() {
@@ -186,6 +275,13 @@ async function ensureBookingSchemaInternal() {
       booking_date DATE NOT NULL,
       booking_time VARCHAR(10) NOT NULL,
       location TEXT NOT NULL,
+      event_address TEXT NULL,
+      event_latitude DECIMAL(10,8) NULL,
+      event_longitude DECIMAL(11,8) NULL,
+      distance_km DECIMAL(8,2) NOT NULL DEFAULT 0,
+      transport_fee BIGINT UNSIGNED NOT NULL DEFAULT 0,
+      package_price BIGINT UNSIGNED NULL,
+      total_price BIGINT UNSIGNED NULL,
       note TEXT NOT NULL,
       status ENUM('pending', 'confirmed', 'completed', 'cancelled') NOT NULL DEFAULT 'pending',
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -198,6 +294,74 @@ async function ensureBookingSchemaInternal() {
       KEY bookings_status_idx (status)
     )
   `);
+
+  const bookingColumns = [
+    {
+      name: "event_address",
+      definition: "TEXT NULL AFTER location",
+    },
+    {
+      name: "event_latitude",
+      definition: "DECIMAL(10,8) NULL AFTER event_address",
+    },
+    {
+      name: "event_longitude",
+      definition: "DECIMAL(11,8) NULL AFTER event_latitude",
+    },
+    {
+      name: "distance_km",
+      definition: "DECIMAL(8,2) NOT NULL DEFAULT 0 AFTER event_longitude",
+    },
+    {
+      name: "transport_fee",
+      definition: "BIGINT UNSIGNED NOT NULL DEFAULT 0 AFTER distance_km",
+    },
+    {
+      name: "package_price",
+      definition: "BIGINT UNSIGNED NULL AFTER transport_fee",
+    },
+    {
+      name: "total_price",
+      definition: "BIGINT UNSIGNED NULL AFTER package_price",
+    },
+    {
+      name: "service_completed_at",
+      definition: "TIMESTAMP NULL DEFAULT NULL AFTER status",
+    },
+    {
+      name: "customer_confirmed_at",
+      definition: "TIMESTAMP NULL DEFAULT NULL AFTER service_completed_at",
+    },
+    {
+      name: "cancelled_at",
+      definition: "TIMESTAMP NULL DEFAULT NULL AFTER customer_confirmed_at",
+    },
+    {
+      name: "cancel_reason",
+      definition: "TEXT NULL AFTER cancelled_at",
+    },
+  ] as const;
+
+  for (const column of bookingColumns) {
+    const [rows] = await pool.execute<(RowDataPacket & { COLUMN_NAME: string })[]>(
+      `
+        SELECT COLUMN_NAME
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'bookings'
+          AND COLUMN_NAME = ?
+        LIMIT 1
+      `,
+      [column.name]
+    );
+
+    if (rows.length === 0) {
+      await pool.execute(`
+        ALTER TABLE bookings
+        ADD COLUMN ${column.name} ${column.definition}
+      `);
+    }
+  }
 
   const [customerUserIdRows] = await pool.execute<
     (RowDataPacket & { COLUMN_NAME: string })[]
@@ -258,11 +422,23 @@ export async function ensureBookingSchema() {
   return global.__airislensBookingSchemaReady;
 }
 
-export async function createBooking(input: CreateBookingInput) {
-  await ensureBookingSchema();
+async function insertBooking(
+  connection: PoolConnection,
+  input: CreateBookingInput
+) {
+  const teamQuota = await lockPartnerQuota(connection, input.photographerUserId);
+  const activeBookingCount = await countActiveBookingsForUpdate(
+    connection,
+    input.photographerUserId,
+    input.bookingDate,
+    input.bookingTime.trim()
+  );
 
-  const pool = getDbPool();
-  const [result] = await pool.execute<ResultSetHeader>(
+  if (activeBookingCount >= teamQuota) {
+    throw new BookingSlotUnavailableError();
+  }
+
+  const [result] = await connection.execute<ResultSetHeader>(
     `
       INSERT INTO bookings (
         order_id,
@@ -276,10 +452,17 @@ export async function createBooking(input: CreateBookingInput) {
         booking_date,
         booking_time,
         location,
+        event_address,
+        event_latitude,
+        event_longitude,
+        distance_km,
+        transport_fee,
+        package_price,
+        total_price,
         note,
         status
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     [
       input.orderId,
@@ -292,7 +475,14 @@ export async function createBooking(input: CreateBookingInput) {
       input.amount,
       input.bookingDate,
       input.bookingTime.trim(),
-      input.location?.trim() ?? "",
+      input.location?.trim() ?? input.eventAddress?.trim() ?? "",
+      input.eventAddress?.trim() ?? null,
+      input.eventLatitude ?? null,
+      input.eventLongitude ?? null,
+      input.distanceKm ?? 0,
+      input.transportFee ?? 0,
+      input.packagePrice ?? null,
+      input.totalPrice ?? input.amount,
       input.note?.trim() ?? "",
       mapStatusToDb(input.status ?? "Pending"),
     ]
@@ -301,31 +491,117 @@ export async function createBooking(input: CreateBookingInput) {
   return Number(result.insertId);
 }
 
-export async function updateAdminBookingStatus(
-  userId: number,
-  bookingId: number,
-  status: AdminBookingStatus
+export async function createBooking(
+  input: CreateBookingInput,
+  connection?: PoolConnection
 ) {
   await ensureBookingSchema();
 
+  if (connection) {
+    return insertBooking(connection, input);
+  }
+
   const pool = getDbPool();
-  const [result] = await pool.execute<ResultSetHeader>(
+  const managedConnection = await pool.getConnection();
+
+  try {
+    await managedConnection.beginTransaction();
+    const bookingId = await insertBooking(managedConnection, input);
+    await managedConnection.commit();
+    return bookingId;
+  } catch (error) {
+    await managedConnection.rollback();
+    throw error;
+  } finally {
+    managedConnection.release();
+  }
+}
+
+export async function updateAdminBookingStatus(
+  userId: number,
+  bookingId: number,
+  status: AdminBookingStatus,
+  connection?: PoolConnection
+) {
+  await ensureBookingSchema();
+
+  const executor = getExecutor(connection);
+  const nextStatus = mapStatusToDb(status);
+  const [result] = await executor.execute<ResultSetHeader>(
     `
       UPDATE bookings
-      SET status = ?
+      SET
+        status = ?,
+        service_completed_at = CASE
+          WHEN ? = 'completed' THEN COALESCE(service_completed_at, CURRENT_TIMESTAMP)
+          ELSE service_completed_at
+        END,
+        cancelled_at = CASE
+          WHEN ? = 'cancelled' THEN COALESCE(cancelled_at, CURRENT_TIMESTAMP)
+          ELSE cancelled_at
+        END
       WHERE id = ?
         AND photographer_user_id = ?
       LIMIT 1
     `,
-    [mapStatusToDb(status), bookingId, userId]
+    [nextStatus, nextStatus, nextStatus, bookingId, userId]
   );
 
   return result.affectedRows > 0;
 }
 
+export async function getAdminBookingById(
+  userId: number,
+  bookingId: number,
+  connection?: PoolConnection
+) {
+  await ensureBookingSchema();
+
+  const executor = getExecutor(connection);
+  const [rows] = await executor.execute<BookingRow[]>(
+    `
+      SELECT
+        id,
+        order_id,
+        photographer_user_id,
+        customer_user_id,
+        package_id,
+        customer_name,
+        customer_phone,
+        package_name,
+        amount,
+        DATE_FORMAT(booking_date, '%Y-%m-%d') AS booking_date,
+        booking_time,
+        location,
+        event_address,
+        event_latitude,
+        event_longitude,
+        distance_km,
+        transport_fee,
+        package_price,
+        total_price,
+        note,
+        status,
+        service_completed_at,
+        customer_confirmed_at,
+        cancelled_at,
+        cancel_reason,
+        created_at
+      FROM bookings
+      WHERE id = ?
+        AND photographer_user_id = ?
+      LIMIT 1
+    `,
+    [bookingId, userId]
+  );
+
+  return rows[0] ? normalizeBooking(rows[0]) : null;
+}
+
 export async function updateBookingStatusByOrderId(
   orderId: string,
-  status: AdminBookingStatus
+  status: AdminBookingStatus,
+  connection?: PoolConnection
 ) {
   await ensureBookingSchema();
 
@@ -335,8 +611,8 @@ export async function updateBookingStatusByOrderId(
     return false;
   }
 
-  const pool = getDbPool();
-  const [result] = await pool.execute<ResultSetHeader>(
+  const executor = getExecutor(connection);
+  const [result] = await executor.execute<ResultSetHeader>(
     `
       UPDATE bookings
       SET status = ?
@@ -347,6 +623,156 @@ export async function updateBookingStatusByOrderId(
   );
 
   return result.affectedRows > 0;
+}
+
+export async function getUserBookingById(
+  userId: number,
+  bookingId: number,
+  connection?: PoolConnection
+) {
+  await ensureBookingSchema();
+
+  const executor = getExecutor(connection);
+  const [rows] = await executor.execute<BookingRow[]>(
+    `
+      SELECT
+        id,
+        order_id,
+        photographer_user_id,
+        customer_user_id,
+        package_id,
+        customer_name,
+        customer_phone,
+        package_name,
+        amount,
+        DATE_FORMAT(booking_date, '%Y-%m-%d') AS booking_date,
+        booking_time,
+        location,
+        event_address,
+        event_latitude,
+        event_longitude,
+        distance_km,
+        transport_fee,
+        package_price,
+        total_price,
+        note,
+        status,
+        service_completed_at,
+        customer_confirmed_at,
+        cancelled_at,
+        cancel_reason,
+        created_at
+      FROM bookings
+      WHERE id = ?
+        AND customer_user_id = ?
+      LIMIT 1
+    `,
+    [bookingId, userId]
+  );
+
+  return rows[0] ? normalizeBooking(rows[0]) : null;
+}
+
+export async function markCustomerBookingConfirmed(
+  userId: number,
+  bookingId: number,
+  connection?: PoolConnection
+) {
+  await ensureBookingSchema();
+
+  const executor = getExecutor(connection);
+  const [result] = await executor.execute<ResultSetHeader>(
+    `
+      UPDATE bookings
+      SET
+        customer_confirmed_at = COALESCE(customer_confirmed_at, CURRENT_TIMESTAMP)
+      WHERE id = ?
+        AND customer_user_id = ?
+        AND status = 'completed'
+      LIMIT 1
+    `,
+    [bookingId, userId]
+  );
+
+  return result.affectedRows > 0;
+}
+
+export async function cancelUserBooking(
+  userId: number,
+  bookingId: number,
+  reason?: string | null,
+  connection?: PoolConnection
+) {
+  await ensureBookingSchema();
+
+  const executor = getExecutor(connection);
+  const [result] = await executor.execute<ResultSetHeader>(
+    `
+      UPDATE bookings
+      SET
+        status = 'cancelled',
+        cancelled_at = COALESCE(cancelled_at, CURRENT_TIMESTAMP),
+        cancel_reason = ?
+      WHERE id = ?
+        AND customer_user_id = ?
+        AND status IN ('pending', 'confirmed')
+      LIMIT 1
+    `,
+    [reason?.trim() || "Dibatalkan oleh customer.", bookingId, userId]
+  );
+
+  return result.affectedRows > 0;
+}
+
+export async function getBookingByOrderId(
+  orderId: string,
+  connection?: PoolConnection
+) {
+  await ensureBookingSchema();
+
+  const normalizedOrderId = orderId.trim();
+
+  if (!normalizedOrderId) {
+    return null;
+  }
+
+  const executor = getExecutor(connection);
+  const [rows] = await executor.execute<BookingRow[]>(
+    `
+      SELECT
+        id,
+        order_id,
+        photographer_user_id,
+        customer_user_id,
+        package_id,
+        customer_name,
+        customer_phone,
+        package_name,
+        amount,
+        DATE_FORMAT(booking_date, '%Y-%m-%d') AS booking_date,
+        booking_time,
+        location,
+        event_address,
+        event_latitude,
+        event_longitude,
+        distance_km,
+        transport_fee,
+        package_price,
+        total_price,
+        note,
+        status,
+        service_completed_at,
+        customer_confirmed_at,
+        cancelled_at,
+        created_at
+      FROM bookings
+      WHERE order_id = ?
+      LIMIT 1
+    `,
+    [normalizedOrderId]
+  );
+
+  return rows[0] ? normalizeBooking(rows[0]) : null;
 }
 
 export async function listAdminBookings(userId: number, limit?: number) {
@@ -374,8 +800,18 @@ export async function listAdminBookings(userId: number, limit?: number) {
         DATE_FORMAT(booking_date, '%Y-%m-%d') AS booking_date,
         booking_time,
         location,
+        event_address,
+        event_latitude,
+        event_longitude,
+        distance_km,
+        transport_fee,
+        package_price,
+        total_price,
         note,
         status,
+        service_completed_at,
+        customer_confirmed_at,
+        cancelled_at,
         created_at
       FROM bookings
       WHERE photographer_user_id = ?
@@ -403,8 +839,9 @@ export async function getBookingDashboardSnapshot(
       today_bookings: number;
       month_bookings: number;
       total_revenue: number | null;
-      pending_count: number;
-      confirmed_count: number;
+      awaiting_payment_count: number;
+      scheduled_count: number;
+      awaiting_customer_confirmation_count: number;
       completed_count: number;
       cancelled_count: number;
     })[]
@@ -415,9 +852,10 @@ export async function getBookingDashboardSnapshot(
         SUM(CASE WHEN booking_date = ? THEN 1 ELSE 0 END) AS today_bookings,
         SUM(CASE WHEN DATE_FORMAT(booking_date, '%Y-%m') = ? THEN 1 ELSE 0 END) AS month_bookings,
         SUM(CASE WHEN status <> 'cancelled' THEN amount ELSE 0 END) AS total_revenue,
-        SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending_count,
-        SUM(CASE WHEN status = 'confirmed' THEN 1 ELSE 0 END) AS confirmed_count,
-        SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed_count,
+        SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS awaiting_payment_count,
+        SUM(CASE WHEN status = 'confirmed' THEN 1 ELSE 0 END) AS scheduled_count,
+        SUM(CASE WHEN status = 'completed' AND customer_confirmed_at IS NULL THEN 1 ELSE 0 END) AS awaiting_customer_confirmation_count,
+        SUM(CASE WHEN status = 'completed' AND customer_confirmed_at IS NOT NULL THEN 1 ELSE 0 END) AS completed_count,
         SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled_count
       FROM bookings
       WHERE photographer_user_id = ?
@@ -440,8 +878,18 @@ export async function getBookingDashboardSnapshot(
         DATE_FORMAT(booking_date, '%Y-%m-%d') AS booking_date,
         booking_time,
         location,
+        event_address,
+        event_latitude,
+        event_longitude,
+        distance_km,
+        transport_fee,
+        package_price,
+        total_price,
         note,
         status,
+        service_completed_at,
+        customer_confirmed_at,
+        cancelled_at,
         created_at
       FROM bookings
       WHERE photographer_user_id = ?
@@ -466,8 +914,18 @@ export async function getBookingDashboardSnapshot(
         DATE_FORMAT(booking_date, '%Y-%m-%d') AS booking_date,
         booking_time,
         location,
+        event_address,
+        event_latitude,
+        event_longitude,
+        distance_km,
+        transport_fee,
+        package_price,
+        total_price,
         note,
         status,
+        service_completed_at,
+        customer_confirmed_at,
+        cancelled_at,
         created_at
       FROM bookings
       WHERE photographer_user_id = ?
@@ -487,8 +945,11 @@ export async function getBookingDashboardSnapshot(
     monthBookings: Number(aggregate?.month_bookings ?? 0),
     totalRevenue: Number(aggregate?.total_revenue ?? 0),
     statusBreakdown: {
-      Pending: Number(aggregate?.pending_count ?? 0),
-      Confirmed: Number(aggregate?.confirmed_count ?? 0),
+      AwaitingPayment: Number(aggregate?.awaiting_payment_count ?? 0),
+      Scheduled: Number(aggregate?.scheduled_count ?? 0),
+      AwaitingCustomerConfirmation: Number(
+        aggregate?.awaiting_customer_confirmation_count ?? 0
+      ),
       Completed: Number(aggregate?.completed_count ?? 0),
       Cancelled: Number(aggregate?.cancelled_count ?? 0),
     },
@@ -499,6 +960,8 @@ export async function getBookingDashboardSnapshot(
 
 export async function listUserBookingHistory(userId: number) {
   await ensureBookingSchema();
+  const { ensureDisputeSchema } = await import("@/lib/disputes");
+  await ensureDisputeSchema();
 
   const pool = getDbPool();
   const query = `
@@ -515,13 +978,35 @@ export async function listUserBookingHistory(userId: number) {
       DATE_FORMAT(b.booking_date, '%Y-%m-%d') AS booking_date,
       b.booking_time,
       b.location,
+      b.event_address,
+      b.event_latitude,
+      b.event_longitude,
+      b.distance_km,
+      b.transport_fee,
+      b.package_price,
+      b.total_price,
       b.note,
       b.status,
+      b.service_completed_at,
+      b.customer_confirmed_at,
+      b.cancelled_at,
       b.created_at,
-      COALESCE(NULLIF(p.brand_name, ''), u.name) AS photographer_name
+      COALESCE(NULLIF(p.brand_name, ''), u.name) AS photographer_name,
+      pay.status AS payment_status,
+      refund.status AS refund_request_status
     FROM bookings b
     LEFT JOIN partner_profiles p ON p.user_id = b.photographer_user_id
     LEFT JOIN users u ON u.id = b.photographer_user_id
+    LEFT JOIN payments pay ON pay.booking_id = b.id
+    LEFT JOIN booking_disputes refund
+      ON refund.id = (
+        SELECT bd.id
+        FROM booking_disputes bd
+        WHERE bd.booking_id = b.id
+          AND bd.type = 'refund_request'
+        ORDER BY bd.id DESC
+        LIMIT 1
+      )
     WHERE b.customer_user_id = ?
     ORDER BY b.booking_date DESC, b.booking_time DESC, b.id DESC
   `;
@@ -529,6 +1014,8 @@ export async function listUserBookingHistory(userId: number) {
   let rows:
     | (BookingRow & {
         photographer_name: string | null;
+        payment_status: string | null;
+        refund_request_status: string | null;
       })[]
     | undefined;
 
@@ -536,6 +1023,8 @@ export async function listUserBookingHistory(userId: number) {
     const [result] = await pool.execute<
       (BookingRow & {
         photographer_name: string | null;
+        payment_status: string | null;
+        refund_request_status: string | null;
       })[]
     >(query, [userId]);
     rows = result;
@@ -554,21 +1043,61 @@ export async function listUserBookingHistory(userId: number) {
     const [retryResult] = await pool.execute<
       (BookingRow & {
         photographer_name: string | null;
+        payment_status: string | null;
+        refund_request_status: string | null;
       })[]
     >(query, [userId]);
     rows = retryResult;
   }
 
-  return rows.map((row) => ({
-    id: row.id,
-    orderId: row.order_id,
-    photographerName: row.photographer_name || "Photographer",
-    bookingDate: row.booking_date,
-    bookingTime: row.booking_time,
-    amount: Number(row.amount),
-    location: row.location,
-    status: mapStatusFromDb(row.status),
-  }));
+  return rows.map((row) => {
+    const status = mapStatusFromDb(row.status);
+    const serviceCompletedAt = normalizeTimestamp(row.service_completed_at);
+    const customerConfirmedAt = normalizeTimestamp(row.customer_confirmed_at);
+    const lifecycleStatus = getBookingLifecycleStatus({
+      status,
+      customerConfirmedAt,
+    });
+    const paymentStatus =
+      typeof row.payment_status === "string" ? row.payment_status : null;
+    const refundRequestStatus =
+      typeof row.refund_request_status === "string"
+        ? row.refund_request_status
+        : null;
+
+    return {
+      id: row.id,
+      orderId: row.order_id,
+      photographerName: row.photographer_name || "Photographer",
+      bookingDate: row.booking_date,
+      bookingTime: row.booking_time,
+      amount: Number(row.amount),
+      location: row.location,
+      eventAddress: row.event_address,
+      distanceKm: Number(row.distance_km ?? 0),
+      transportFee: Number(row.transport_fee ?? 0),
+      packagePrice:
+        row.package_price === null ? null : Number(row.package_price),
+      totalPrice: row.total_price === null ? null : Number(row.total_price),
+      status,
+      lifecycleStatus,
+      lifecycleStatusLabel: getBookingLifecycleLabel(lifecycleStatus),
+      serviceCompletedAt,
+      customerConfirmedAt,
+      canCancelBooking: ["pending", "confirmed"].includes(row.status),
+      canRequestRefund:
+        row.status === "cancelled" &&
+        paymentStatus === "paid" &&
+        !["open", "reviewing", "resolved_refund"].includes(
+          refundRequestStatus ?? ""
+        ),
+      refundRequestStatus,
+      canConfirmCompletion:
+        row.status === "completed" &&
+        row.service_completed_at !== null &&
+        row.customer_confirmed_at === null,
+    } satisfies UserBookingHistoryItem;
+  });
 }
 
 export async function listAdminBookingsByDate(userId: number, date: string) {
@@ -590,8 +1119,18 @@ export async function listAdminBookingsByDate(userId: number, date: string) {
         DATE_FORMAT(booking_date, '%Y-%m-%d') AS booking_date,
         booking_time,
         location,
+        event_address,
+        event_latitude,
+        event_longitude,
+        distance_km,
+        transport_fee,
+        package_price,
+        total_price,
         note,
         status,
+        service_completed_at,
+        customer_confirmed_at,
+        cancelled_at,
         created_at
       FROM bookings
       WHERE photographer_user_id = ?
@@ -601,14 +1140,24 @@ export async function listAdminBookingsByDate(userId: number, date: string) {
     [userId, date]
   );
 
-  return rows.map((row) => ({
-    id: row.id,
-    orderId: row.order_id,
-    customerName: row.customer_name,
-    packageName: row.package_name,
-    bookingDate: row.booking_date,
-    bookingTime: row.booking_time,
-    location: row.location,
-    status: mapStatusFromDb(row.status),
-  })) satisfies BookingCalendarItem[];
+  return rows.map((row) => {
+    const status = mapStatusFromDb(row.status);
+    const lifecycleStatus = getBookingLifecycleStatus({
+      status,
+      customerConfirmedAt: normalizeTimestamp(row.customer_confirmed_at),
+    });
+
+    return {
+      id: row.id,
+      orderId: row.order_id,
+      customerName: row.customer_name,
+      packageName: row.package_name,
+      bookingDate: row.booking_date,
+      bookingTime: row.booking_time,
+      location: row.location,
+      status,
+      lifecycleStatus,
+      lifecycleStatusLabel: getBookingLifecycleLabel(lifecycleStatus),
+    } satisfies BookingCalendarItem;
+  });
 }

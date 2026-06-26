@@ -2,6 +2,7 @@ import BookingHistory from "@/components/landingpage/bookinghistory/BookingHisto
 import Navbar from "@/components/ui/navbar/Navbar";
 import { listUserBookingHistory } from "@/lib/bookings";
 import { getServerSession } from "@/lib/auth/session";
+import { reconcilePendingPaymentsForUser } from "@/lib/midtrans";
 import { redirect } from "next/navigation";
 
 export default async function BookingPage() {
@@ -16,6 +17,7 @@ export default async function BookingPage() {
   }
 
   const userId = Number(session.sub);
+  await reconcilePendingPaymentsForUser(userId);
   const bookings = await listUserBookingHistory(userId);
 
   return (

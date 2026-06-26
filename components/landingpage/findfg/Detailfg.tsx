@@ -17,7 +17,7 @@ type PartnerPackage = {
 };
 
 type PartnerDetail = {
-  id: number;
+  userId: number;
   slug: string;
   brandName: string;
   description: string;
@@ -166,9 +166,12 @@ export default function DetailFg({
               {item.description || "Deskripsi paket belum diisi."}
             </p>
 
-            <button className="w-full rounded-md bg-black py-2 text-[18px] text-white">
+            <Link
+              href={`/bookingform?fg=${partner.userId}&package=${item.id}`}
+              className="block w-full rounded-md bg-black py-2 text-center text-[18px] text-white"
+            >
               Choose Package
-            </button>
+            </Link>
           </div>
         ))}
       </div>

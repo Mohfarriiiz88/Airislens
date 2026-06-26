@@ -12,6 +12,7 @@ import {
   Image,
   ClipboardList,
   User,
+  Wallet,
 } from "lucide-react";
 import { LogOut,ExternalLink  } from "lucide-react";
 
@@ -21,6 +22,7 @@ const menu = [
   { label: "Jadwal", href: "/admin/calender", icon: CalendarDays },
   { label: "Paket", href: "/admin/paket", icon: Package },
   { label: "Galeri", href: "/admin/galeri", icon: Image },
+  { label: "Keuangan", href: "/admin/finance", icon: Wallet },
   { label: "Profile", href: "/admin/profile", icon: User },
 ];
 

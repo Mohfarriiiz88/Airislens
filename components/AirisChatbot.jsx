@@ -10,6 +10,107 @@ const WELCOME_MESSAGE = {
     "Halo, aku Airis AI. Tanya saja soal paket foto, alur booking, jadwal, atau pembayaran AirisLens.",
 };
 
+function renderInlineContent(text) {
+  const segments = text.split(/(\*\*.*?\*\*)/g).filter(Boolean);
+
+  return segments.map((segment, index) => {
+    if (segment.startsWith("**") && segment.endsWith("**")) {
+      return (
+        <strong key={`${segment}-${index}`} className="font-semibold text-neutral-950">
+          {segment.slice(2, -2)}
+        </strong>
+      );
+    }
+
+    return <span key={`${segment}-${index}`}>{segment}</span>;
+  });
+}
+
+function AssistantRichContent({ content }) {
+  const blocks = content
+    .trim()
+    .split(/\n\s*\n/)
+    .map((block) => block.trim())
+    .filter(Boolean);
+
+  return (
+    <div className="space-y-3">
+      {blocks.map((block, blockIndex) => {
+        const lines = block
+          .split("\n")
+          .map((line) => line.trim())
+          .filter(Boolean);
+
+        if (!lines.length) {
+          return null;
+        }
+
+        const bulletLines = lines.every((line) => /^[-*•]\s+/.test(line));
+        const numberedLines = lines.every((line) => /^\d+[\.\)]\s+/.test(line));
+
+        if (bulletLines) {
+          return (
+            <ul
+              key={`block-${blockIndex}`}
+              className="space-y-2 pl-5 text-[14px] leading-6 text-neutral-800 list-disc marker:text-neutral-500"
+            >
+              {lines.map((line, lineIndex) => (
+                <li key={`bullet-${blockIndex}-${lineIndex}`}>
+                  {renderInlineContent(line.replace(/^[-*•]\s+/, ""))}
+                </li>
+              ))}
+            </ul>
+          );
+        }
+
+        if (numberedLines) {
+          return (
+            <ol
+              key={`block-${blockIndex}`}
+              className="space-y-2 pl-5 text-[14px] leading-6 text-neutral-800 list-decimal marker:font-medium marker:text-neutral-500"
+            >
+              {lines.map((line, lineIndex) => (
+                <li key={`ordered-${blockIndex}-${lineIndex}`}>
+                  {renderInlineContent(line.replace(/^\d+[\.\)]\s+/, ""))}
+                </li>
+              ))}
+            </ol>
+          );
+        }
+
+        const isShortHeading =
+          lines.length === 1 &&
+          lines[0].endsWith(":") &&
+          lines[0].length <= 48;
+
+        if (isShortHeading) {
+          return (
+            <p
+              key={`heading-${blockIndex}`}
+              className="text-[13px] font-semibold uppercase tracking-[0.14em] text-neutral-500"
+            >
+              {lines[0].slice(0, -1)}
+            </p>
+          );
+        }
+
+        return (
+          <div key={`paragraph-${blockIndex}`} className="space-y-2">
+            {lines.map((line, lineIndex) => (
+              <p
+                key={`line-${blockIndex}-${lineIndex}`}
+                className="text-[14px] leading-6 text-neutral-800"
+              >
+                {renderInlineContent(line)}
+              </p>
+            ))}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function ChatBubble({ role, content }) {
   const isUser = role === "user";
 
@@ -23,7 +124,7 @@ function ChatBubble({ role, content }) {
             : "rounded-bl-md border border-black/5 bg-white text-neutral-900",
         ].join(" ")}
       >
-        {content}
+        {isUser ? <p className="whitespace-pre-wrap">{content}</p> : <AssistantRichContent content={content} />}
       </div>
     </div>
   );
@@ -145,7 +246,7 @@ export default function AirisChatbot() {
 
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[10000]">
-      <div className="pointer-events-none mx-auto flex w-full max-w-[1440px] justify-end px-4 pb-4 sm:px-6 sm:pb-6">
+      <div className="pointer-events-none flex w-full justify-end px-4 pb-4 sm:px-6 sm:pb-6">
         <div className="pointer-events-auto flex flex-col items-end gap-3">
           {isOpen ? (
             <section className="flex h-[min(70vh,620px)] w-[min(calc(100vw-2rem),390px)] flex-col overflow-hidden rounded-[28px] border border-white/60 bg-[linear-gradient(180deg,rgba(253,253,253,0.98)_0%,rgba(244,239,232,0.98)_100%)] shadow-[0_24px_80px_rgba(0,0,0,0.22)] backdrop-blur-xl">

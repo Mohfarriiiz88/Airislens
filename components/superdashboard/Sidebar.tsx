@@ -1,5 +1,6 @@
 "use client";
 
+import NextImage from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { usePathname } from "next/navigation";
@@ -10,6 +11,7 @@ import {
   Users,
   UserStar,
   FileCheck,
+  Wallet,
 } from "lucide-react";
 import { LogOut,ExternalLink  } from "lucide-react";
 
@@ -18,6 +20,7 @@ const menu = [
   { label: "Clients", href: "/superadmin/client", icon: Users },
   { label: "Partners", href: "/superadmin/partners", icon: UserStar },
   { label: "Partners App", href: "/superadmin/applications", icon: FileCheck },
+  { label: "Finance", href: "/superadmin/finance", icon: Wallet },
   { label: "Gallery Control", href: "/superadmin/gallerycontrol", icon: Image },
 ];
 
@@ -53,9 +56,11 @@ export default function Sidebar() {
         `}
         onClick={() => setCollapsed(!collapsed)}
       >
-        <img
+        <NextImage
           src={collapsed ? "/svg/logogram.svg" : "/svg/logotype.svg"}
           alt="logo"
+          width={128}
+          height={32}
           className={`${collapsed ? "w-8" : "w-32"}`}
         />
       </div>

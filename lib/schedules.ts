@@ -8,6 +8,8 @@ import {
   type BookingCalendarItem,
 } from "@/lib/bookings";
 import { getDbPool } from "@/lib/db";
+import { getPartnerBookingProfile } from "@/lib/partner-cms";
+import { BOOKING_TIME_SLOTS } from "@/lib/time-slots";
 
 type PartnerScheduleRow = RowDataPacket & {
   id: number;
@@ -49,6 +51,14 @@ export type AdminScheduleCalendar = {
   schedules: PartnerSchedule[];
   bookings: BookingCalendarItem[];
   unavailableTimes: string[];
+};
+
+export type TimeSlotAvailabilitySummary = {
+  time: string;
+  status: "available" | "limited" | "full" | "blocked";
+  activeBookings: number;
+  teamQuota: number;
+  remainingQuota: number;
 };
 
 export class ScheduleConflictError extends Error {
@@ -143,7 +153,7 @@ async function hasManualScheduleConflict(
     typeof ignoreScheduleId === "number" && ignoreScheduleId > 0
       ? "AND id <> ?"
       : "";
-  const params =
+  const params: Array<string | number> =
     typeof ignoreScheduleId === "number" && ignoreScheduleId > 0
       ? [userId, date, time, ignoreScheduleId]
       : [userId, date, time];
@@ -166,7 +176,7 @@ async function hasManualScheduleConflict(
   return Number(rows[0]?.total ?? 0) > 0;
 }
 
-async function hasBookingConflict(userId: number, date: string, time: string) {
+async function countActiveBookings(userId: number, date: string, time: string) {
   const pool = getDbPool();
   const [rows] = await pool.execute<
     (RowDataPacket & { total: number })[]
@@ -183,7 +193,12 @@ async function hasBookingConflict(userId: number, date: string, time: string) {
     [userId, date, time]
   );
 
-  return Number(rows[0]?.total ?? 0) > 0;
+  return Number(rows[0]?.total ?? 0);
+}
+
+async function getPartnerTeamQuota(userId: number) {
+  const profile = await getPartnerBookingProfile(userId);
+  return Math.max(1, Number(profile?.teamQuota ?? 1));
 }
 
 export async function isTimeSlotUnavailable(
@@ -196,12 +211,13 @@ export async function isTimeSlotUnavailable(
 ) {
   await ensureScheduleSchema();
 
-  const [hasScheduleConflict, hasBookedConflict] = await Promise.all([
+  const [hasScheduleConflict, activeBookingCount, teamQuota] = await Promise.all([
     hasManualScheduleConflict(userId, date, time, options?.ignoreScheduleId),
-    hasBookingConflict(userId, date, time),
+    countActiveBookings(userId, date, time),
+    getPartnerTeamQuota(userId),
   ]);
 
-  return hasScheduleConflict || hasBookedConflict;
+  return hasScheduleConflict || activeBookingCount >= teamQuota;
 }
 
 async function assertScheduleSlotAvailable(
@@ -211,7 +227,17 @@ async function assertScheduleSlotAvailable(
     ignoreScheduleId?: number;
   }
 ) {
-  if (await isTimeSlotUnavailable(userId, input.date, input.time, options)) {
+  const [hasScheduleConflict, activeBookingCount] = await Promise.all([
+    hasManualScheduleConflict(
+      userId,
+      input.date,
+      input.time,
+      options?.ignoreScheduleId
+    ),
+    countActiveBookings(userId, input.date, input.time),
+  ]);
+
+  if (hasScheduleConflict || activeBookingCount > 0) {
     throw new ScheduleConflictError();
   }
 }
@@ -225,6 +251,9 @@ export async function listPartnerSchedules(userId: number, date?: string) {
 
   const pool = getDbPool();
   const hasDateFilter = Boolean(date && isValidDateInput(date));
+  const params: Array<string | number> = hasDateFilter
+    ? [userId, date as string]
+    : [userId];
   const [rows] = await pool.execute<PartnerScheduleRow[]>(
     `
       SELECT
@@ -242,7 +271,7 @@ export async function listPartnerSchedules(userId: number, date?: string) {
         ${hasDateFilter ? "AND schedule_date = ?" : ""}
       ORDER BY schedule_date ASC, schedule_time ASC, id ASC
     `,
-    hasDateFilter ? [userId, date] : [userId]
+    params
   );
 
   return rows.map(normalizeSchedule);
@@ -395,6 +424,17 @@ export async function deletePartnerSchedule(userId: number, scheduleId: number) 
 }
 
 export async function listUnavailableTimeSlots(userId: number, date: string) {
+  const summaries = await listTimeSlotAvailabilitySummaries(userId, date);
+
+  return summaries
+    .filter((item) => item.status === "blocked" || item.status === "full")
+    .map((item) => item.time);
+}
+
+export async function listTimeSlotAvailabilitySummaries(
+  userId: number,
+  date: string
+) {
   await ensureScheduleSchema();
 
   if (!isValidDateInput(date)) {
@@ -402,7 +442,7 @@ export async function listUnavailableTimeSlots(userId: number, date: string) {
   }
 
   const pool = getDbPool();
-  const [scheduleRows, bookingRows] = await Promise.all([
+  const [scheduleRows, bookingRows, teamQuota] = await Promise.all([
     pool.execute<(RowDataPacket & { schedule_time: string })[]>(
       `
         SELECT schedule_time
@@ -412,19 +452,22 @@ export async function listUnavailableTimeSlots(userId: number, date: string) {
       `,
       [userId, date]
     ),
-    pool.execute<(RowDataPacket & { booking_time: string })[]>(
+    pool.execute<(RowDataPacket & { booking_time: string; total: number })[]>(
       `
-        SELECT booking_time
+        SELECT booking_time, COUNT(*) AS total
         FROM bookings
         WHERE photographer_user_id = ?
           AND booking_date = ?
           AND status <> 'cancelled'
+        GROUP BY booking_time
       `,
       [userId, date]
     ),
+    getPartnerTeamQuota(userId),
   ]);
 
   const occupied = new Set<string>();
+  const bookingCounts = new Map<string, number>();
 
   for (const row of scheduleRows[0]) {
     if (row.schedule_time) {
@@ -434,11 +477,53 @@ export async function listUnavailableTimeSlots(userId: number, date: string) {
 
   for (const row of bookingRows[0]) {
     if (row.booking_time) {
-      occupied.add(row.booking_time);
+      bookingCounts.set(row.booking_time, Number(row.total ?? 0));
     }
   }
 
-  return Array.from(occupied).sort((a, b) => a.localeCompare(b));
+  return BOOKING_TIME_SLOTS.map((time) => {
+    const activeBookings = bookingCounts.get(time) ?? 0;
+    const isBlocked = occupied.has(time);
+    const remainingQuota = Math.max(0, teamQuota - activeBookings);
+
+    if (isBlocked) {
+      return {
+        time,
+        status: "blocked",
+        activeBookings,
+        teamQuota,
+        remainingQuota: 0,
+      } satisfies TimeSlotAvailabilitySummary;
+    }
+
+    if (activeBookings >= teamQuota) {
+      return {
+        time,
+        status: "full",
+        activeBookings,
+        teamQuota,
+        remainingQuota: 0,
+      } satisfies TimeSlotAvailabilitySummary;
+    }
+
+    if (activeBookings > 0) {
+      return {
+        time,
+        status: "limited",
+        activeBookings,
+        teamQuota,
+        remainingQuota,
+      } satisfies TimeSlotAvailabilitySummary;
+    }
+
+    return {
+      time,
+      status: "available",
+      activeBookings,
+      teamQuota,
+      remainingQuota,
+    } satisfies TimeSlotAvailabilitySummary;
+  });
 }
 
 export async function getAdminScheduleCalendar(userId: number, date: string) {

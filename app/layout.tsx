@@ -42,7 +42,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={neueHaas.variable}>
-      <body className="bg-black text-white font-sans antialiased">
+      <body className="bg-white text-black font-sans antialiased">
         {children}
         <AirisChatbot />
         <Script

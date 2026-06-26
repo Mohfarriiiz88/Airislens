@@ -14,12 +14,7 @@ export default async function FindFgPage() {
   return (
     <>
       <Navbar />
-      <Profile
-        initialUser={{
-          name: session.name,
-          email: session.email,
-        }}
-      />
+      <Profile />
       <Footer />
     </>
   );

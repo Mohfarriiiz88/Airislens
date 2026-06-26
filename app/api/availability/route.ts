@@ -1,6 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server";
 
-import { listUnavailableTimeSlots } from "@/lib/schedules";
+import {
+  listTimeSlotAvailabilitySummaries,
+  listUnavailableTimeSlots,
+} from "@/lib/schedules";
 
 export const runtime = "nodejs";
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -32,6 +35,10 @@ export async function GET(request: NextRequest) {
     photographerUserId,
     date
   );
+  const timeSlots = await listTimeSlotAvailabilitySummaries(
+    photographerUserId,
+    date
+  );
 
-  return NextResponse.json({ unavailableTimes });
+  return NextResponse.json({ unavailableTimes, timeSlots });
 }

@@ -2,6 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import {
+  type BookingCalendarItem,
+  type BookingLifecycleStatus,
+} from "@/lib/bookings.shared";
 import { BOOKING_TIME_SLOTS } from "@/lib/time-slots";
 
 type PartnerSchedule = {
@@ -12,17 +16,6 @@ type PartnerSchedule = {
   time: string;
   location: string;
   note: string;
-};
-
-type BookingCalendarItem = {
-  id: number;
-  orderId: string;
-  customerName: string;
-  packageName: string;
-  bookingDate: string;
-  bookingTime: string;
-  location: string;
-  status: "Pending" | "Confirmed" | "Completed" | "Cancelled";
 };
 
 type ScheduleFormState = {
@@ -459,14 +452,18 @@ export default function AdminCalendarPage() {
                           {booking.bookingTime} - {booking.packageName}
                         </p>
                         <p className="text-sm text-black/70">
-                          {booking.customerName} · {booking.location || "Lokasi belum diisi"}
+                          {booking.customerName} -{" "}
+                          {booking.location || "Lokasi belum diisi"}
                         </p>
                         <p className="text-xs text-black/50">
                           Order ID: {booking.orderId}
                         </p>
                       </div>
 
-                      <StatusPill status={booking.status} />
+                      <StatusPill
+                        status={booking.lifecycleStatus}
+                        label={booking.lifecycleStatusLabel}
+                      />
                     </div>
                   </article>
                 ))}
@@ -598,19 +595,22 @@ export default function AdminCalendarPage() {
 
 function StatusPill({
   status,
+  label,
 }: {
-  status: BookingCalendarItem["status"];
+  status: BookingLifecycleStatus;
+  label: string;
 }) {
-  const styles: Record<BookingCalendarItem["status"], string> = {
-    Pending: "bg-yellow-500/15 text-yellow-700",
-    Confirmed: "bg-blue-500/15 text-blue-700",
+  const styles: Record<BookingLifecycleStatus, string> = {
+    AwaitingPayment: "bg-yellow-500/15 text-yellow-700",
+    Scheduled: "bg-blue-500/15 text-blue-700",
+    AwaitingCustomerConfirmation: "bg-amber-500/15 text-amber-700",
     Completed: "bg-green-500/15 text-green-700",
     Cancelled: "bg-red-500/15 text-red-700",
   };
 
   return (
     <span className={`rounded-full px-3 py-1 text-xs font-medium ${styles[status]}`}>
-      {status}
+      {label}
     </span>
   );
 }

@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { type AdminBooking } from "@/lib/bookings";
+import { type AdminBooking } from "@/lib/bookings.shared";
 
 type BookingTableProps = {
   bookings: AdminBooking[];
@@ -55,7 +55,7 @@ export default function BookingTable({ bookings }: BookingTableProps) {
                 <td className="text-center">
                   {formatDate(booking.bookingDate)}
                 </td>
-                <td className="text-center">{booking.status}</td>
+                <td className="text-center">{booking.lifecycleStatusLabel}</td>
               </tr>
             ))
           )}

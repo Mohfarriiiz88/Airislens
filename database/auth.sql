@@ -2,6 +2,7 @@ CREATE TABLE IF NOT EXISTS users (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   name VARCHAR(100) NOT NULL,
   email VARCHAR(191) NOT NULL,
+  phone VARCHAR(20) DEFAULT NULL,
   password_hash TEXT NOT NULL,
   role ENUM('superadmin', 'admin', 'user') NOT NULL DEFAULT 'user',
   superadmin_slot TINYINT GENERATED ALWAYS AS (

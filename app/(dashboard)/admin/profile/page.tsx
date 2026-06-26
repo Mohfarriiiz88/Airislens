@@ -11,11 +11,38 @@ type ProfileForm = {
   specializations: string[];
   address: string;
   whatsapp: string;
+  latitude: string;
+  longitude: string;
+  freeDistanceKm: string;
+  transportFeePerKm: string;
+  partnerType: "individual" | "studio";
+  teamQuota: string;
   instagram: string;
   tiktok: string;
   facebook: string;
   website: string;
   profilePhotoUrl: string;
+};
+
+type ProfileApiResponse = {
+  accountEmail?: string;
+  brandName?: string;
+  slug?: string;
+  description?: string;
+  specializations?: string[];
+  address?: string;
+  whatsapp?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  freeDistanceKm?: number | null;
+  transportFeePerKm?: number | null;
+  partnerType?: "individual" | "studio";
+  teamQuota?: number | null;
+  instagram?: string;
+  tiktok?: string;
+  facebook?: string;
+  website?: string;
+  profilePhotoUrl?: string;
 };
 
 const SPECIALIZATION_OPTIONS = [
@@ -35,12 +62,59 @@ const EMPTY_FORM: ProfileForm = {
   specializations: [],
   address: "",
   whatsapp: "",
+  latitude: "",
+  longitude: "",
+  freeDistanceKm: "5",
+  transportFeePerKm: "3000",
+  partnerType: "individual",
+  teamQuota: "1",
   instagram: "",
   tiktok: "",
   facebook: "",
   website: "",
   profilePhotoUrl: "",
 };
+
+function normalizeProfileForm(profile?: ProfileApiResponse | null): ProfileForm {
+  return {
+    accountEmail: profile?.accountEmail ?? "",
+    brandName: profile?.brandName ?? "",
+    slug: profile?.slug ?? "",
+    description: profile?.description ?? "",
+    specializations: Array.isArray(profile?.specializations)
+      ? profile.specializations
+      : [],
+    address: profile?.address ?? "",
+    whatsapp: profile?.whatsapp ?? "",
+    latitude:
+      profile?.latitude === null || profile?.latitude === undefined
+        ? ""
+        : String(profile.latitude),
+    longitude:
+      profile?.longitude === null || profile?.longitude === undefined
+        ? ""
+        : String(profile.longitude),
+    freeDistanceKm:
+      profile?.freeDistanceKm === null || profile?.freeDistanceKm === undefined
+        ? "5"
+        : String(profile.freeDistanceKm),
+    transportFeePerKm:
+      profile?.transportFeePerKm === null ||
+      profile?.transportFeePerKm === undefined
+        ? "3000"
+        : String(profile.transportFeePerKm),
+    partnerType: profile?.partnerType === "studio" ? "studio" : "individual",
+    teamQuota:
+      profile?.teamQuota === null || profile?.teamQuota === undefined
+        ? "1"
+        : String(profile.teamQuota),
+    instagram: profile?.instagram ?? "",
+    tiktok: profile?.tiktok ?? "",
+    facebook: profile?.facebook ?? "",
+    website: profile?.website ?? "",
+    profilePhotoUrl: profile?.profilePhotoUrl ?? "",
+  };
+}
 
 export default function ProfilePage() {
   const [form, setForm] = useState<ProfileForm>(EMPTY_FORM);
@@ -60,7 +134,7 @@ export default function ProfilePage() {
       });
       const data = (await response.json()) as {
         message?: string;
-        profile?: ProfileForm;
+        profile?: ProfileApiResponse;
       };
 
       if (!response.ok) {
@@ -69,7 +143,7 @@ export default function ProfilePage() {
         return;
       }
 
-      setForm(data.profile ?? EMPTY_FORM);
+      setForm(normalizeProfileForm(data.profile));
       setIsError(false);
       setMessage("");
     } catch {
@@ -96,6 +170,14 @@ export default function ProfilePage() {
     setForm((prev) => ({
       ...prev,
       [field]: value,
+    }));
+  }
+
+  function handlePartnerTypeChange(value: "individual" | "studio") {
+    setForm((prev) => ({
+      ...prev,
+      partnerType: value,
+      teamQuota: value === "individual" ? "1" : prev.teamQuota || "1",
     }));
   }
 
@@ -170,6 +252,12 @@ export default function ProfilePage() {
           specializations: form.specializations,
           address: form.address,
           whatsapp: form.whatsapp,
+          latitude: form.latitude,
+          longitude: form.longitude,
+          freeDistanceKm: form.freeDistanceKm,
+          transportFeePerKm: form.transportFeePerKm,
+          partnerType: form.partnerType,
+          teamQuota: form.partnerType === "individual" ? "1" : form.teamQuota,
           instagram: form.instagram,
           tiktok: form.tiktok,
           facebook: form.facebook,
@@ -179,7 +267,7 @@ export default function ProfilePage() {
       });
       const data = (await response.json()) as {
         message?: string;
-        profile?: ProfileForm;
+        profile?: ProfileApiResponse;
       };
 
       if (!response.ok) {
@@ -188,7 +276,9 @@ export default function ProfilePage() {
         return;
       }
 
-      setForm(data.profile ?? { ...form, profilePhotoUrl });
+      setForm(
+        normalizeProfileForm(data.profile ?? null)
+      );
       setPhotoFile(null);
       setPhotoPreviewUrl("");
       setIsError(false);
@@ -280,6 +370,109 @@ export default function ProfilePage() {
                   onChange={(event) => handleChange("address", event.target.value)}
                   className="mt-1 w-full rounded-xl border border-black/20 px-4 py-3 text-sm"
                 />
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="text-sm text-black">Latitude</label>
+                  <input
+                    type="number"
+                    step="0.00000001"
+                    value={form.latitude}
+                    onChange={(event) => handleChange("latitude", event.target.value)}
+                    className="mt-1 w-full rounded-xl border border-black/20 px-4 py-3 text-sm"
+                    placeholder="-6.20000000"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm text-black">Longitude</label>
+                  <input
+                    type="number"
+                    step="0.00000001"
+                    value={form.longitude}
+                    onChange={(event) => handleChange("longitude", event.target.value)}
+                    className="mt-1 w-full rounded-xl border border-black/20 px-4 py-3 text-sm"
+                    placeholder="106.81666600"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm text-black">Jarak Gratis Transport (km)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={form.freeDistanceKm}
+                    onChange={(event) =>
+                      handleChange("freeDistanceKm", event.target.value)
+                    }
+                    className="mt-1 w-full rounded-xl border border-black/20 px-4 py-3 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm text-black">Biaya Transport per km</label>
+                  <input
+                    type="number"
+                    step="1"
+                    min="0"
+                    value={form.transportFeePerKm}
+                    onChange={(event) =>
+                      handleChange("transportFeePerKm", event.target.value)
+                    }
+                    className="mt-1 w-full rounded-xl border border-black/20 px-4 py-3 text-sm"
+                    placeholder="3000"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="text-sm text-black">Tipe Partner</label>
+                  <div className="mt-2 grid gap-3 grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={() => handlePartnerTypeChange("individual")}
+                      className={`rounded-xl border px-4 py-3 text-sm transition ${
+                        form.partnerType === "individual"
+                          ? "border-black bg-black text-white"
+                          : "border-black/10 bg-white text-black hover:border-black"
+                      }`}
+                    >
+                      Perorangan
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handlePartnerTypeChange("studio")}
+                      className={`rounded-xl border px-4 py-3 text-sm transition ${
+                        form.partnerType === "studio"
+                          ? "border-black bg-black text-white"
+                          : "border-black/10 bg-white text-black hover:border-black"
+                      }`}
+                    >
+                      Studio
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-sm text-black">Kuota Tim per Slot</label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={form.teamQuota}
+                    disabled={form.partnerType === "individual"}
+                    onChange={(event) => handleChange("teamQuota", event.target.value)}
+                    className="mt-1 w-full rounded-xl border border-black/20 px-4 py-3 text-sm disabled:cursor-not-allowed disabled:bg-black/[0.04] disabled:text-black/45"
+                  />
+                  <p className="mt-2 text-xs text-black/50">
+                    {form.partnerType === "individual"
+                      ? "Partner perorangan selalu memakai kuota 1 slot."
+                      : "Jumlah maksimum booking aktif pada jam yang sama."}
+                  </p>
+                </div>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
@@ -400,8 +593,32 @@ export default function ProfilePage() {
                 <p>{form.whatsapp || "Belum diisi"}</p>
               </div>
               <div>
+                <p className="text-black/40">Tipe Partner</p>
+                <p>{form.partnerType === "studio" ? "Studio" : "Perorangan"}</p>
+              </div>
+              <div>
+                <p className="text-black/40">Kuota Tim</p>
+                <p>{form.teamQuota || "1"} slot</p>
+              </div>
+              <div>
                 <p className="text-black/40">Alamat</p>
                 <p>{form.address || "Belum diisi"}</p>
+              </div>
+              <div>
+                <p className="text-black/40">Koordinat</p>
+                <p>
+                  {form.latitude && form.longitude
+                    ? `${form.latitude}, ${form.longitude}`
+                    : "Belum diisi"}
+                </p>
+              </div>
+              <div>
+                <p className="text-black/40">Transport</p>
+                <p>
+                  Gratis {form.freeDistanceKm || "0"} km · Rp{" "}
+                  {Number(form.transportFeePerKm || 0).toLocaleString("id-ID")}
+                  /km
+                </p>
               </div>
             </div>
           </div>

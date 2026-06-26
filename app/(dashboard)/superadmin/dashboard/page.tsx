@@ -4,17 +4,32 @@ import BookingTable from "@/components/superdashboard/BookingTable"
 
 import UserList from "@/components/superdashboard/Userlist"
 import PartnerList from "@/components/superdashboard/Partnerlist"
+import { getSuperadminDashboardSnapshot } from "@/lib/superadmin-dashboard"
 
-export default function Page() {
+function formatNumber(value: number) {
+  return new Intl.NumberFormat("id-ID").format(value)
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0,
+  }).format(value)
+}
+
+export default async function Page() {
+  const snapshot = await getSuperadminDashboardSnapshot()
+
   return (
     <div className="space-y-6">
 
       {/* ===== STATS ===== */}
       <div className="grid grid-cols-4 gap-4">
-        <StatCard title="Total User" value="1,245" />
-        <StatCard title="Total Partner" value="58" />
-        <StatCard title="Total Booking" value="3,421" />
-        <StatCard title="Revenue" value="Rp 245.000.000" />
+        <StatCard title="Total User" value={formatNumber(snapshot.totalUsers)} />
+        <StatCard title="Total Partner" value={formatNumber(snapshot.totalPartners)} />
+        <StatCard title="Total Booking" value={formatNumber(snapshot.totalBookings)} />
+        <StatCard title="Revenue" value={formatCurrency(snapshot.totalRevenue)} />
       </div>
 
       {/* ===== ANALYTICS + PARTNER ===== */}

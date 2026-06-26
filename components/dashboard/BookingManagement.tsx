@@ -2,11 +2,28 @@
 
 import { useMemo, useState } from "react";
 
-import { type AdminBooking, type AdminBookingStatus } from "@/lib/bookings";
+import {
+  getBookingLifecycleLabel,
+  getBookingLifecycleStatus,
+  type AdminBooking,
+  type AdminBookingStatus,
+  type BookingLifecycleStatus,
+} from "@/lib/bookings.shared";
 
 type BookingManagementProps = {
   bookings: AdminBooking[];
 };
+
+const STATUS_FILTERS = [
+  "All",
+  "AwaitingPayment",
+  "Scheduled",
+  "AwaitingCustomerConfirmation",
+  "Completed",
+  "Cancelled",
+] as const;
+
+type StatusFilter = (typeof STATUS_FILTERS)[number];
 
 function formatDate(date: string, time: string) {
   const formattedDate = new Intl.DateTimeFormat("id-ID", {
@@ -19,16 +36,31 @@ function formatDate(date: string, time: string) {
   return `${formattedDate} - ${time}`;
 }
 
+function getStatusOptions(status: AdminBookingStatus) {
+  const options: Record<AdminBookingStatus, AdminBookingStatus[]> = {
+    Pending: ["Pending", "Confirmed", "Cancelled"],
+    Confirmed: ["Confirmed", "Completed", "Cancelled"],
+    Completed: ["Completed"],
+    Cancelled: ["Cancelled"],
+  };
+
+  return options[status];
+}
+
 export default function BookingManagement({
   bookings,
 }: BookingManagementProps) {
   const [bookingRows, setBookingRows] = useState(bookings);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("All");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
   const [editingStatus, setEditingStatus] = useState<
     Record<number, AdminBookingStatus>
   >({});
   const [savingId, setSavingId] = useState<number | null>(null);
+  const [feedback, setFeedback] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
 
   const filteredData = useMemo(() => {
     return bookingRows.filter((booking) => {
@@ -41,7 +73,7 @@ export default function BookingManagement({
         booking.orderId.toLowerCase().includes(keyword);
 
       const matchStatus =
-        statusFilter === "All" || booking.status === statusFilter;
+        statusFilter === "All" || booking.lifecycleStatus === statusFilter;
 
       return matchSearch && matchStatus;
     });
@@ -57,6 +89,7 @@ export default function BookingManagement({
     }
 
     setSavingId(bookingId);
+    setFeedback(null);
 
     try {
       const response = await fetch(`/api/admin/bookings/${bookingId}/status`, {
@@ -76,11 +109,36 @@ export default function BookingManagement({
       }
 
       setBookingRows((current) =>
-        current.map((booking) =>
-          booking.id === bookingId
-            ? { ...booking, status: nextStatus }
-            : booking
-        )
+        current.map((booking) => {
+          if (booking.id !== bookingId) {
+            return booking;
+          }
+
+          const serviceCompletedAt =
+            nextStatus === "Completed"
+              ? booking.serviceCompletedAt ?? new Date().toISOString()
+              : booking.serviceCompletedAt;
+          const customerConfirmedAt =
+            nextStatus === "Completed" ? booking.customerConfirmedAt : null;
+          const cancelledAt =
+            nextStatus === "Cancelled"
+              ? booking.cancelledAt ?? new Date().toISOString()
+              : booking.cancelledAt;
+          const lifecycleStatus = getBookingLifecycleStatus({
+            status: nextStatus,
+            customerConfirmedAt,
+          });
+
+          return {
+            ...booking,
+            status: nextStatus,
+            lifecycleStatus,
+            lifecycleStatusLabel: getBookingLifecycleLabel(lifecycleStatus),
+            serviceCompletedAt,
+            customerConfirmedAt,
+            cancelledAt,
+          };
+        })
       );
 
       setEditingStatus((current) => {
@@ -88,8 +146,16 @@ export default function BookingManagement({
         delete next[bookingId];
         return next;
       });
+      setFeedback({
+        type: "success",
+        message: data?.message || "Status booking berhasil diperbarui.",
+      });
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Gagal menyimpan status.");
+      setFeedback({
+        type: "error",
+        message:
+          error instanceof Error ? error.message : "Gagal menyimpan status.",
+      });
     } finally {
       setSavingId(null);
     }
@@ -106,6 +172,18 @@ export default function BookingManagement({
         </p>
       </div>
 
+      {feedback ? (
+        <div
+          className={`rounded-2xl border px-4 py-3 text-sm ${
+            feedback.type === "success"
+              ? "border-green-500/20 bg-green-500/10 text-green-700"
+              : "border-red-500/20 bg-red-500/10 text-red-700"
+          }`}
+        >
+          {feedback.message}
+        </div>
+      ) : null}
+
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <input
           type="text"
@@ -117,14 +195,17 @@ export default function BookingManagement({
 
         <select
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
+          onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
           className="rounded-xl border border-black/20 bg-[#ffffff] px-4 py-2 text-sm text-black outline-none focus:border-black"
         >
           <option value="All">Semua Status</option>
-          <option value="Pending">Pending</option>
-          <option value="Confirmed">Confirmed</option>
-          <option value="Completed">Completed</option>
-          <option value="Cancelled">Cancelled</option>
+          <option value="AwaitingPayment">Menunggu Pembayaran</option>
+          <option value="Scheduled">Dijadwalkan</option>
+          <option value="AwaitingCustomerConfirmation">
+            Menunggu Konfirmasi Customer
+          </option>
+          <option value="Completed">Selesai</option>
+          <option value="Cancelled">Dibatalkan</option>
         </select>
       </div>
 
@@ -156,7 +237,10 @@ export default function BookingManagement({
                 </td>
                 <td className="px-6 py-4">{booking.location || "-"}</td>
                 <td className="px-6 py-4">
-                  <StatusBadge status={booking.status} />
+                  <StatusBadge
+                    status={booking.lifecycleStatus}
+                    label={booking.lifecycleStatusLabel}
+                  />
                 </td>
                 <td className="px-6 py-4">
                   {new Intl.NumberFormat("id-ID", {
@@ -177,10 +261,11 @@ export default function BookingManagement({
                       }
                       className="rounded-lg border border-black/20 bg-white px-3 py-2 text-xs text-black outline-none focus:border-black"
                     >
-                      <option value="Pending">Pending</option>
-                      <option value="Confirmed">Confirmed</option>
-                      <option value="Completed">Completed</option>
-                      <option value="Cancelled">Cancelled</option>
+                      {getStatusOptions(booking.status).map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
                     </select>
                     <button
                       type="button"
@@ -214,17 +299,20 @@ export default function BookingManagement({
 
 function StatusBadge({
   status,
+  label,
 }: {
-  status: AdminBookingStatus;
+  status: BookingLifecycleStatus;
+  label: string;
 }) {
   const base = "px-3 py-1 rounded-full text-xs font-medium";
 
-  const styles: Record<AdminBookingStatus, string> = {
-    Pending: "bg-yellow-500/20 text-yellow-700",
-    Confirmed: "bg-blue-500/20 text-blue-700",
+  const styles: Record<BookingLifecycleStatus, string> = {
+    AwaitingPayment: "bg-yellow-500/20 text-yellow-700",
+    Scheduled: "bg-blue-500/20 text-blue-700",
+    AwaitingCustomerConfirmation: "bg-amber-500/20 text-amber-700",
     Completed: "bg-green-500/20 text-green-700",
     Cancelled: "bg-red-500/20 text-red-700",
   };
 
-  return <span className={`${base} ${styles[status]}`}>{status}</span>;
+  return <span className={`${base} ${styles[status]}`}>{label}</span>;
 }

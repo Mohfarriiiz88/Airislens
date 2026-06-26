@@ -177,20 +177,20 @@ export default function AdminGaleriPage() {
       }
 
       if (active) {
+        const activeId = active.id;
+        const updatedItem: GalleryItem = {
+          id: activeId,
+          title: form.title,
+          category: form.category,
+          imageUrl,
+        };
+
         setItems((prev) =>
-          prev.map((item) =>
-            item.id === active.id
-              ? {
-                  id: active.id,
-                  title: form.title,
-                  category: form.category,
-                  imageUrl,
-                }
-              : item
-          )
+          prev.map((item) => (item.id === activeId ? updatedItem : item))
         );
       } else if (data.item) {
-        setItems((prev) => [data.item, ...prev]);
+        const createdItem = data.item;
+        setItems((prev) => [createdItem, ...prev]);
       }
 
       setOpen(false);

@@ -1,14 +1,18 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Pencil } from "lucide-react";
 import { useRouter } from "next/navigation";
+
+type UserRole = "superadmin" | "admin" | "user" | null;
 
 export default function Profile() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
+  const [userRole, setUserRole] = useState<UserRole>(null);
 
   const [form, setForm] = useState({
     name: "",
@@ -44,6 +48,8 @@ export default function Profile() {
         if (res.ok) {
           const user = data.user;
 
+          setUserRole(user.role ?? null);
+
           setForm({
             name: user.name || "",
             email: user.email || "",
@@ -71,6 +77,12 @@ export default function Profile() {
     form.name !== initial.name ||
     form.email !== initial.email ||
     form.phone !== initial.phone;
+  const dashboardHref =
+    userRole === "superadmin"
+      ? "/superadmin/dashboard"
+      : userRole === "admin"
+        ? "/admin/dashboard"
+        : null;
 
   // ================= ACTION =================
   const handleSave = () => {
@@ -205,6 +217,15 @@ export default function Profile() {
           >
             {loading ? "Saving..." : "Save Changes"}
           </button>
+
+          {dashboardHref ? (
+            <Link
+              href={dashboardHref}
+              className="border border-black bg-white text-black px-6 py-3 rounded-md text-[16px] hover:bg-black hover:text-white transition"
+            >
+              {userRole === "superadmin" ? "Superadmin Dashboard" : "Admin Dashboard"}
+            </Link>
+          ) : null}
 
           <button
             onClick={handleLogout}

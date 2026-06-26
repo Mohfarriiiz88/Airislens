@@ -1,4 +1,4 @@
-import { type AdminBooking } from "@/lib/bookings";
+import { type AdminBooking } from "@/lib/bookings.shared";
 
 type UpcomingListProps = {
   bookings: AdminBooking[];

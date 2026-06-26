@@ -118,11 +118,21 @@ export default function AdminPaketPage() {
       }
 
       if (editing) {
+        const editingId = editing.id;
+        const updatedPackage: Paket = {
+          id: editingId,
+          name: form.name,
+          duration: form.duration,
+          price: form.price,
+          description: form.description,
+        };
+
         setPakets((prev) =>
-          prev.map((item) => (item.id === editing.id ? { ...editing, ...form } : item))
+          prev.map((item) => (item.id === editingId ? updatedPackage : item))
         );
       } else if (data.package) {
-        setPakets((prev) => [data.package, ...prev]);
+        const createdPackage = data.package;
+        setPakets((prev) => [createdPackage, ...prev]);
       }
 
       setOpen(false);

@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
+import { type RowDataPacket } from "mysql2/promise";
 
 import { getDbPool } from "@/lib/db";
 
-type PackageRow = {
+type PackageRow = RowDataPacket & {
   id: number;
   user_id: number;
   name: string;
@@ -11,17 +12,20 @@ type PackageRow = {
   description: string;
 };
 
+type PartnerRow = RowDataPacket & {
+  user_id: number;
+  brand_name: string;
+  address: string;
+};
+
 export async function GET(
-  request: Request,
+  _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
-    
-    console.log("Packages API - Received ID:", id);
 
     if (!id || id === "undefined") {
-      console.warn("Invalid ID: undefined");
       return NextResponse.json(
         { message: "Invalid partner ID", packages: [] },
         { status: 400 }
@@ -38,6 +42,22 @@ export async function GET(
     }
 
     const pool = getDbPool();
+    const [partnerRows] = await pool.execute<PartnerRow[]>(
+      `
+        SELECT
+          p.user_id,
+          COALESCE(NULLIF(p.brand_name, ''), u.name) AS brand_name,
+          p.address
+        FROM partner_profiles p
+        INNER JOIN users u ON u.id = p.user_id
+        WHERE u.role = 'admin'
+          AND p.user_id = ?
+        LIMIT 1
+      `,
+      [partnerId]
+    );
+
+    const partnerRow = partnerRows[0] ?? null;
 
     const query = `
       SELECT id, user_id, name, duration, price, description
@@ -46,9 +66,9 @@ export async function GET(
       ORDER BY id ASC
     `;
 
-    const [rows] = await pool.execute<any[]>(query, [partnerId]);
+    const [rows] = await pool.execute<PackageRow[]>(query, [partnerId]);
 
-    const packages = (rows as PackageRow[]).map((row) => ({
+    const packages = rows.map((row) => ({
       id: row.id,
       name: row.name,
       duration: row.duration,
@@ -56,9 +76,16 @@ export async function GET(
       description: row.description,
     }));
 
-    console.log(`Packages found for partner ${partnerId}:`, packages.length);
-
-    return NextResponse.json({ packages });
+    return NextResponse.json({
+      partner: partnerRow
+        ? {
+            userId: partnerRow.user_id,
+            brandName: partnerRow.brand_name,
+            address: partnerRow.address,
+          }
+        : null,
+      packages,
+    });
   } catch (error) {
     console.error("Error fetching packages:", error);
     return NextResponse.json(

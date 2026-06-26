@@ -3,8 +3,51 @@ import { NextResponse } from "next/server";
 import { requireSessionWithRole } from "@/lib/auth/access";
 import {
   getAdminPartnerProfile,
+  type PartnerType,
   upsertAdminPartnerProfile,
 } from "@/lib/partner-cms";
+
+function parseOptionalCoordinate(
+  value: unknown,
+  label: string,
+  min: number,
+  max: number
+) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const numericValue = Number(value);
+
+  if (!Number.isFinite(numericValue) || numericValue < min || numericValue > max) {
+    throw new Error(`${label} tidak valid.`);
+  }
+
+  return numericValue;
+}
+
+function parseNonNegativeNumber(
+  value: unknown,
+  label: string,
+  fallback: number,
+  integerOnly = false
+) {
+  if (value === null || value === undefined || value === "") {
+    return fallback;
+  }
+
+  const numericValue = Number(value);
+
+  if (
+    !Number.isFinite(numericValue) ||
+    numericValue < 0 ||
+    (integerOnly && !Number.isInteger(numericValue))
+  ) {
+    throw new Error(`${label} tidak valid.`);
+  }
+
+  return numericValue;
+}
 
 export async function GET() {
   const authorized = await requireSessionWithRole(["admin"]);
@@ -38,6 +81,12 @@ export async function PUT(request: Request) {
     specializations?: string[];
     address?: string;
     whatsapp?: string;
+    latitude?: number | string | null;
+    longitude?: number | string | null;
+    freeDistanceKm?: number | string | null;
+    transportFeePerKm?: number | string | null;
+    partnerType?: PartnerType;
+    teamQuota?: number | string | null;
     instagram?: string;
     tiktok?: string;
     facebook?: string;
@@ -49,6 +98,8 @@ export async function PUT(request: Request) {
   const description = body.description?.trim() ?? "";
   const address = body.address?.trim() ?? "";
   const whatsapp = body.whatsapp?.trim() ?? "";
+  const partnerType: PartnerType =
+    body.partnerType === "studio" ? "studio" : "individual";
 
   if (!brandName) {
     return NextResponse.json(
@@ -57,30 +108,87 @@ export async function PUT(request: Request) {
     );
   }
 
-  const profile = await upsertAdminPartnerProfile(authorized.userId, {
-    brandName,
-    description,
-    specializations: Array.isArray(body.specializations)
-      ? body.specializations.map((item) => item.trim()).filter(Boolean)
-      : [],
-    address,
-    whatsapp,
-    instagram: body.instagram?.trim() ?? "",
-    tiktok: body.tiktok?.trim() ?? "",
-    facebook: body.facebook?.trim() ?? "",
-    website: body.website?.trim() ?? "",
-    profilePhotoUrl: body.profilePhotoUrl?.trim() ?? "",
-  });
+  try {
+    const latitude = parseOptionalCoordinate(
+      body.latitude,
+      "Latitude fotografer",
+      -90,
+      90
+    );
+    const longitude = parseOptionalCoordinate(
+      body.longitude,
+      "Longitude fotografer",
+      -180,
+      180
+    );
 
-  if (!profile) {
+    if ((latitude === null) !== (longitude === null)) {
+      return NextResponse.json(
+        {
+          message:
+            "Latitude dan longitude fotografer harus diisi bersamaan atau dikosongkan bersamaan.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const freeDistanceKm = parseNonNegativeNumber(
+      body.freeDistanceKm,
+      "Jarak gratis transport",
+      5
+    );
+    const transportFeePerKm = parseNonNegativeNumber(
+      body.transportFeePerKm,
+      "Biaya transport per km",
+      3000,
+      true
+    );
+    const teamQuota =
+      partnerType === "individual"
+        ? 1
+        : parseNonNegativeNumber(body.teamQuota, "Kuota tim", 1, true);
+
+    const profile = await upsertAdminPartnerProfile(authorized.userId, {
+      brandName,
+      description,
+      specializations: Array.isArray(body.specializations)
+        ? body.specializations.map((item) => item.trim()).filter(Boolean)
+        : [],
+      address,
+      whatsapp,
+      latitude,
+      longitude,
+      freeDistanceKm,
+      transportFeePerKm,
+      partnerType,
+      teamQuota,
+      instagram: body.instagram?.trim() ?? "",
+      tiktok: body.tiktok?.trim() ?? "",
+      facebook: body.facebook?.trim() ?? "",
+      website: body.website?.trim() ?? "",
+      profilePhotoUrl: body.profilePhotoUrl?.trim() ?? "",
+    });
+
+    if (!profile) {
+      return NextResponse.json(
+        { message: "Akun partner tidak ditemukan." },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      message: "Profil partner berhasil disimpan.",
+      profile,
+    });
+  } catch (error) {
     return NextResponse.json(
-      { message: "Akun partner tidak ditemukan." },
-      { status: 404 }
+      {
+        message:
+          error instanceof Error
+            ? error.message
+            : "Data profil partner tidak valid.",
+      },
+      { status: 400 }
     );
   }
-
-  return NextResponse.json({
-    message: "Profil partner berhasil disimpan.",
-    profile,
-  });
 }

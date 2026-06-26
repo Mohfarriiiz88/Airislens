@@ -53,7 +53,7 @@ export async function findUserByEmail(email: string) {
   const pool = getDbPool();
   const [rows] = await pool.execute<UserRecord[]>(
     `
-      SELECT id, name, email, password_hash, role
+      SELECT id, name, email, phone, password_hash, role, created_at, updated_at
       FROM users
       WHERE email = ?
       LIMIT 1
@@ -68,7 +68,7 @@ export async function findUserById(id: number) {
   const pool = getDbPool();
   const [rows] = await pool.execute<UserRecord[]>(
     `
-      SELECT id, name, email, password_hash, role, created_at, updated_at
+      SELECT id, name, email, phone, password_hash, role, created_at, updated_at
       FROM users
       WHERE id = ?
       LIMIT 1

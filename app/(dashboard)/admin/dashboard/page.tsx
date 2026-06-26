@@ -7,6 +7,7 @@ import StatCard from "@/components/dashboard/StatCard";
 import UpcomingList from "@/components/dashboard/UpcomingList";
 import { getBookingDashboardSnapshot } from "@/lib/bookings";
 import { getServerSession } from "@/lib/auth/session";
+import { reconcilePendingPaymentsForPartner } from "@/lib/midtrans";
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("id-ID", {
@@ -24,6 +25,7 @@ export default async function DashboardPage() {
   }
 
   const userId = Number(session.sub);
+  await reconcilePendingPaymentsForPartner(userId);
   const snapshot = await getBookingDashboardSnapshot(userId);
 
   return (
