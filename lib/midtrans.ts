@@ -11,7 +11,7 @@ import {
 } from "@/lib/bookings";
 import { getDbPool } from "@/lib/db";
 import { syncRefundDisputeAfterPaymentUpdate } from "@/lib/disputes";
-import { getMidtransConfig } from "@/lib/env";
+import { getMidtransRuntimeConfig } from "@/lib/midtrans-config";
 import {
   createPayment,
   createPaymentEvent,
@@ -64,10 +64,10 @@ function getErrorMessage(error: unknown) {
   return typeof error === "string" ? error : "Unknown reconcile error";
 }
 
-export function verifyMidtransSignature(
+export async function verifyMidtransSignature(
   payload: MidtransTransactionStatusPayload
 ) {
-  const { serverKey } = getMidtransConfig();
+  const { serverKey } = await getMidtransRuntimeConfig();
 
   if (
     !payload.order_id ||
@@ -188,8 +188,8 @@ function parseMidtransTimestamp(value?: string) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-function getMidtransApiBaseUrl() {
-  const { isProduction } = getMidtransConfig();
+async function getMidtransApiBaseUrl() {
+  const { isProduction } = await getMidtransRuntimeConfig();
   return isProduction
     ? "https://api.midtrans.com"
     : "https://api.sandbox.midtrans.com";
@@ -215,9 +215,9 @@ async function fetchMidtransTransactionStatus(orderId: string) {
     return null;
   }
 
-  const { serverKey } = getMidtransConfig();
+  const { serverKey } = await getMidtransRuntimeConfig();
   const response = await fetch(
-    `${getMidtransApiBaseUrl()}/v2/${encodeURIComponent(normalizedOrderId)}/status`,
+    `${await getMidtransApiBaseUrl()}/v2/${encodeURIComponent(normalizedOrderId)}/status`,
     {
       method: "GET",
       headers: {
@@ -254,9 +254,9 @@ async function postMidtransTransactionCommand(
     return null;
   }
 
-  const { serverKey } = getMidtransConfig();
+  const { serverKey } = await getMidtransRuntimeConfig();
   const response = await fetch(
-    `${getMidtransApiBaseUrl()}/v2/${encodeURIComponent(normalizedOrderId)}/${command}`,
+    `${await getMidtransApiBaseUrl()}/v2/${encodeURIComponent(normalizedOrderId)}/${command}`,
     {
       method: "POST",
       headers: {

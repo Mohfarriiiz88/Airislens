@@ -12,6 +12,7 @@ import {
   UserStar,
   FileCheck,
   Wallet,
+  Settings,
 } from "lucide-react";
 import { LogOut,ExternalLink  } from "lucide-react";
 
@@ -22,6 +23,7 @@ const menu = [
   { label: "Partners App", href: "/superadmin/applications", icon: FileCheck },
   { label: "Finance", href: "/superadmin/finance", icon: Wallet },
   { label: "Gallery Control", href: "/superadmin/gallerycontrol", icon: Image },
+  { label: "Settings", href: "/superadmin/settings", icon: Settings },
 ];
 
 export default function Sidebar() {

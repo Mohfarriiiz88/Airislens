@@ -3,7 +3,7 @@ import "server-only";
 import { Buffer } from "node:buffer";
 
 import { type PaymentRecord } from "@/lib/payments";
-import { getMidtransConfig } from "@/lib/env";
+import { getMidtransRuntimeConfig } from "@/lib/midtrans-config";
 
 type MidtransRefundApiResponse = {
   status_code?: string;
@@ -58,8 +58,8 @@ const MIDTRANS_REFUND_SUPPORTED_METHODS = new Set([
   "akulaku",
 ]);
 
-function getMidtransApiBaseUrl() {
-  const { isProduction } = getMidtransConfig();
+async function getMidtransApiBaseUrl() {
+  const { isProduction } = await getMidtransRuntimeConfig();
   return isProduction
     ? "https://api.midtrans.com"
     : "https://api.sandbox.midtrans.com";
@@ -142,7 +142,7 @@ export async function requestMidtransRefundForPayment(
     );
   }
 
-  const { serverKey } = getMidtransConfig();
+  const { serverKey } = await getMidtransRuntimeConfig();
   const referenceTarget = getRefundReferenceTarget(payment);
   const payload = {
     refund_key: options?.refundKey?.trim() || `refund-${payment.id}`,
@@ -151,7 +151,7 @@ export async function requestMidtransRefundForPayment(
   };
 
   const response = await fetch(
-    `${getMidtransApiBaseUrl()}/v2/${encodeURIComponent(referenceTarget)}/refund`,
+    `${await getMidtransApiBaseUrl()}/v2/${encodeURIComponent(referenceTarget)}/refund`,
     {
       method: "POST",
       headers: {

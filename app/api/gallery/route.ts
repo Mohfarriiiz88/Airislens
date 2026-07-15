@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
+import { type RowDataPacket } from "mysql2/promise";
 
 import { getDbPool } from "@/lib/db";
 
-type GalleryItemRow = {
+type GalleryItemRow = RowDataPacket & {
   id: number;
   user_id: number;
   title: string;
@@ -30,7 +31,7 @@ export async function GET(request: Request) {
 
     query += ` ORDER BY id DESC`;
 
-    const [rows] = await pool.execute<any[]>(query, params);
+    const [rows] = await pool.execute<GalleryItemRow[]>(query, params);
 
     const items = rows.map((row: GalleryItemRow) => ({
       id: row.id,

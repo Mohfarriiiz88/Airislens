@@ -1,5 +1,6 @@
 import Image from "next/image";
-import Link from "next/link";
+
+import BookingGateLink from "@/components/ui/BookingGateLink";
 
 type PartnerGalleryItem = {
   id: number;
@@ -40,8 +41,10 @@ function normalizeWhatsappUrl(value: string) {
 
 export default function DetailFg({
   partner,
+  isAuthenticated,
 }: {
   partner: PartnerDetail;
+  isAuthenticated: boolean;
 }) {
   const heroImage = partner.profilePhotoUrl || partner.gallery[0]?.imageUrl || "/svg/fg1.svg";
   const portfolioImages =
@@ -53,6 +56,7 @@ export default function DetailFg({
           { id: 3, title: "Preview 3", category: "Portfolio", imageUrl: "/images/4.JPG" },
         ];
   const whatsappUrl = normalizeWhatsappUrl(partner.whatsapp);
+  const bookingMessage = `Untuk melanjutkan booking dengan ${partner.brandName}, silakan login terlebih dahulu. Setelah login, Anda akan langsung diarahkan ke form booking.`;
 
   return (
     <section
@@ -119,11 +123,15 @@ export default function DetailFg({
           </div>
 
           <div className="mt-4 flex flex-wrap gap-4">
-           <Link href={`/bookingform?fg=${partner.userId}`}>
-              <button className="rounded-md bg-black px-10 py-2 text-[18px] text-white">
-                Booking
-              </button>
-            </Link>
+            <BookingGateLink
+              href={`/bookingform?fg=${partner.userId}`}
+              loginHref={`/login?next=${encodeURIComponent(`/bookingform?fg=${partner.userId}`)}`}
+              isAuthenticated={isAuthenticated}
+              modalDescription={bookingMessage}
+              className="inline-flex rounded-md bg-black px-10 py-2 text-[18px] text-white"
+            >
+              Booking
+            </BookingGateLink>
 
             {whatsappUrl && (
               <a
@@ -166,12 +174,15 @@ export default function DetailFg({
               {item.description || "Deskripsi paket belum diisi."}
             </p>
 
-            <Link
+            <BookingGateLink
               href={`/bookingform?fg=${partner.userId}&package=${item.id}`}
+              loginHref={`/login?next=${encodeURIComponent(`/bookingform?fg=${partner.userId}&package=${item.id}`)}`}
+              isAuthenticated={isAuthenticated}
+              modalDescription={`Silakan login terlebih dahulu untuk memilih paket ${item.name} dan melanjutkan booking dengan ${partner.brandName}.`}
               className="block w-full rounded-md bg-black py-2 text-center text-[18px] text-white"
             >
               Choose Package
-            </Link>
+            </BookingGateLink>
           </div>
         ))}
       </div>

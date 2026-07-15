@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import Script from "next/script";
 import AirisChatbot from "@/components/AirisChatbot";
+import { getMidtransPublicConfig } from "@/lib/midtrans-config";
 import "./globals.css";
 
 const neueHaas = localFont({
@@ -35,21 +36,28 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const { clientKey, isProduction } = await getMidtransPublicConfig();
+  const snapSrc = isProduction
+    ? "https://app.midtrans.com/snap/snap.js"
+    : "https://app.sandbox.midtrans.com/snap/snap.js";
+
   return (
     <html lang="en" className={neueHaas.variable}>
       <body className="bg-white text-black font-sans antialiased">
         {children}
         <AirisChatbot />
-        <Script
-          src="https://app.sandbox.midtrans.com/snap/snap.js"
-          data-client-key={process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY}
-          strategy="afterInteractive"
-        />
+        {clientKey && (
+          <Script
+            src={snapSrc}
+            data-client-key={clientKey}
+            strategy="afterInteractive"
+          />
+        )}
       </body>
     </html>
   );

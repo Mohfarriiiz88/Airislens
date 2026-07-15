@@ -7,6 +7,14 @@ import { useState } from "react";
 
 type AuthTab = "login" | "register";
 
+function getSafeNextPath(value: string | null) {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) {
+    return null;
+  }
+
+  return value;
+}
+
 export default function LoginPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -22,20 +30,26 @@ export default function LoginPageClient() {
   const [isPending, setIsPending] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  const nextPath = searchParams.get("next") || "/admin/dashboard";
+  const nextPath = getSafeNextPath(searchParams.get("next"));
 
   function getRedirectPath(role?: string) {
     if (role === "superadmin") {
-      return nextPath.startsWith("/superadmin")
-        ? nextPath
-        : "/superadmin/dashboard";
+      return nextPath || "/superadmin/dashboard";
     }
 
     if (role === "admin") {
-      return nextPath.startsWith("/admin") ? nextPath : "/admin/dashboard";
+      if (nextPath?.startsWith("/superadmin")) {
+        return "/admin/dashboard";
+      }
+
+      return nextPath || "/admin/dashboard";
     }
 
-    return "/";
+    if (nextPath?.startsWith("/admin") || nextPath?.startsWith("/superadmin")) {
+      return "/";
+    }
+
+    return nextPath || "/";
   }
 
   function getPasswordChecks(password: string, email: string) {

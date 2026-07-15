@@ -5,7 +5,8 @@ import { BookingPricingError, getBookingQuote } from "@/lib/booking-pricing";
 import { BookingSlotUnavailableError, createBooking } from "@/lib/bookings";
 import { getServerSession } from "@/lib/auth/session";
 import { getDbPool } from "@/lib/db";
-import { getJwtSecret, getMidtransConfig } from "@/lib/env";
+import { getJwtSecret } from "@/lib/env";
+import { getMidtransRuntimeConfig } from "@/lib/midtrans-config";
 import { createPayment } from "@/lib/payments";
 import { isTimeSlotUnavailable } from "@/lib/schedules";
 import { createBookingSettlement } from "@/lib/settlements";
@@ -34,11 +35,18 @@ type PaymentRequestBody = {
 export async function POST(req: Request) {
   try {
     const session = await getServerSession();
+
+    if (!session) {
+      return NextResponse.json(
+        { error: "Silakan login terlebih dahulu untuk melanjutkan booking." },
+        { status: 401 }
+      );
+    }
+
     const body = (await req.json()) as PaymentRequestBody;
     const photographerId = Number(body.photographerId);
     const packageId = Number(body.packageId);
-    const customerUserId =
-      session?.role === "user" ? Number(session.sub) : null;
+    const customerUserId = Number(session.sub);
 
     if (
       !body.name ||
@@ -85,7 +93,7 @@ export async function POST(req: Request) {
       eventLatitude: Number(body.eventLatitude),
       eventLongitude: Number(body.eventLongitude),
     });
-    const midtrans = getMidtransConfig();
+    const midtrans = await getMidtransRuntimeConfig();
 
     const snap = new midtransClient.Snap({
       isProduction: midtrans.isProduction,

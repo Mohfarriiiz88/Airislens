@@ -22,11 +22,21 @@ export function getJwtSecret() {
   return getRequiredEnv("JWT_SECRET");
 }
 
-export function getMidtransConfig() {
+/**
+ * Fallback pembacaan konfigurasi Midtrans dari env var.
+ * Sumber utama adalah tabel `midtrans_config` di DB (lihat lib/midtrans-config.ts);
+ * fungsi ini hanya dipakai saat DB belum diisi.
+ */
+export function getMidtransEnvFallback() {
   return {
-    serverKey: getRequiredEnv("MIDTRANS_SERVER_KEY").trim(),
+    serverKey: process.env.MIDTRANS_SERVER_KEY?.trim() || null,
+    clientKey: process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY?.trim() || null,
     isProduction: process.env.MIDTRANS_IS_PRODUCTION?.trim() === "true",
   };
+}
+
+export function getSettingsEncryptionKey() {
+  return getRequiredEnv("SETTINGS_ENCRYPTION_KEY").trim();
 }
 
 export function getFonnteConfig() {

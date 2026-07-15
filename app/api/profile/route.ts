@@ -22,7 +22,7 @@ export async function PATCH(request: Request) {
     }
 
     // 🔥 ambil user id dari JWT
-    const userId = Number((session as any).sub);
+    const userId = Number(session.sub);
 
     await updateUserProfile({
       id: userId,

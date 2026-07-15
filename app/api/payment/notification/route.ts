@@ -30,7 +30,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "Invalid JSON body." }, { status: 400 });
   }
 
-  if (!verifyMidtransSignature(body)) {
+  if (!(await verifyMidtransSignature(body))) {
     console.error("MIDTRANS WEBHOOK ERROR: invalid signature", {
       orderId: body.order_id,
       transactionId: body.transaction_id,

@@ -58,7 +58,19 @@ export default function ApplicationsPage() {
       }
 
       const result = await response.json()
-      const applications = result.applications.map((app: any) => ({
+      const applications = result.applications.map((app: {
+        id: number
+        name: string
+        email: string
+        phone: string
+        location: string
+        category: string
+        experience: string
+        portfolioLink: string
+        aboutYou: string
+        status: 'pending' | 'approved' | 'rejected'
+        createdAt: string | Date
+      }) => ({
         id: app.id,
         name: app.name,
         email: app.email,

@@ -1,9 +1,11 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
+import LoginRequiredModal from "@/components/ui/LoginRequiredModal";
 import { BOOKING_TIME_SLOTS } from "@/lib/time-slots";
 
 const BookingLocationMap = dynamic(
@@ -183,7 +185,11 @@ function getTimeSlotLabel(slot: TimeSlotAvailabilitySummary) {
   return `${slot.remainingQuota} slot tersedia`;
 }
 
-export default function BookingForm() {
+export default function BookingForm({
+  isAuthenticated,
+}: {
+  isAuthenticated: boolean;
+}) {
   const [form, setForm] = useState<BookingFormState>({
     name: "",
     phone: "",
@@ -216,18 +222,32 @@ export default function BookingForm() {
   const [addressSearchLoading, setAddressSearchLoading] = useState(false);
   const [addressSearchError, setAddressSearchError] = useState<string | null>(null);
   const [addressResults, setAddressResults] = useState<AddressSearchResult[]>([]);
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(!isAuthenticated);
   const hasEditedNameRef = useRef(false);
 
   const searchParams = useSearchParams();
   const fgId = searchParams.get("fg");
   const packageParam = searchParams.get("package");
+  const bookingQueryString = searchParams.toString();
+  const loginRedirectTarget = bookingQueryString
+    ? `/bookingform?${bookingQueryString}`
+    : "/bookingform";
+  const loginHref = `/login?next=${encodeURIComponent(loginRedirectTarget)}`;
+  const loginDescription =
+    "Please log in first to continue booking. Once logged in, you'll be returned to this form and can complete your booking without having to start over.";
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
   useEffect(() => {
-    if (!mounted) {
+    if (!isAuthenticated) {
+      setIsLoginModalOpen(true);
+    }
+  }, [bookingQueryString, isAuthenticated]);
+
+  useEffect(() => {
+    if (!mounted || !isAuthenticated) {
       return;
     }
 
@@ -279,10 +299,10 @@ export default function BookingForm() {
     return () => {
       ignore = true;
     };
-  }, [mounted]);
+  }, [isAuthenticated, mounted]);
 
   useEffect(() => {
-    if (!mounted) {
+    if (!mounted || !isAuthenticated) {
       return;
     }
 
@@ -343,10 +363,10 @@ export default function BookingForm() {
     };
 
     void fetchPackages();
-  }, [fgId, mounted, packageParam]);
+  }, [fgId, isAuthenticated, mounted, packageParam]);
 
   useEffect(() => {
-    if (!mounted || !fgId || !form.date) {
+    if (!mounted || !isAuthenticated || !fgId || !form.date) {
       setUnavailableTimes([]);
       setTimeSlotSummaries([]);
       setAvailabilityError(null);
@@ -420,7 +440,7 @@ export default function BookingForm() {
     return () => {
       ignore = true;
     };
-  }, [fgId, form.date, form.time, mounted]);
+  }, [fgId, form.date, form.time, isAuthenticated, mounted]);
 
   const selectedPackage = useMemo(() => {
     return packages.find((item) => item.id === Number(form.package)) ?? null;
@@ -445,7 +465,7 @@ export default function BookingForm() {
   }, [slotSummaryMap]);
 
   useEffect(() => {
-    if (!mounted || !fgId || !selectedPackage) {
+    if (!mounted || !isAuthenticated || !fgId || !selectedPackage) {
       setQuote(null);
       setQuoteError(null);
       setQuoteLoading(false);
@@ -530,6 +550,7 @@ export default function BookingForm() {
     form.eventAddress,
     form.eventLatitude,
     form.eventLongitude,
+    isAuthenticated,
     mounted,
     selectedPackage,
   ]);
@@ -662,6 +683,11 @@ export default function BookingForm() {
   const handlePayment = async () => {
     setPaymentFeedback(null);
 
+    if (!isAuthenticated) {
+      setIsLoginModalOpen(true);
+      return;
+    }
+
     if (!form.name || !form.phone) {
       setPaymentFeedback({
         tone: "error",
@@ -757,6 +783,9 @@ export default function BookingForm() {
         | null;
 
         if (!res.ok) {
+          if (res.status === 401) {
+            setIsLoginModalOpen(true);
+          }
           if (res.status === 409) {
             setTimeError(
               getTimeSlotErrorMessage(slotSummaryMap[form.time]) ||
@@ -828,6 +857,66 @@ export default function BookingForm() {
       setSubmitLoading(false);
     }
   };
+
+  if (!isAuthenticated) {
+    return (
+      <section
+        data-navbar-tone="dark"
+        className="min-h-screen bg-white px-6 py-10 font-[NeueHaas] text-black md:px-20"
+      >
+        <div className="mb-12 mt-10">
+          <h1 className="text-[24px] font-normal leading-tight md:text-[40px]">
+            Form Booking
+          </h1>
+
+          <p className="mt-2 max-w-2xl text-[18px] md:text-[20px]">
+            Login diperlukan sebelum Anda bisa memilih paket dan menyelesaikan
+            booking di AIRISLENS.
+          </p>
+        </div>
+
+        <div className="max-w-2xl rounded-[28px] border border-black/10 bg-[linear-gradient(180deg,#fcfbf8_0%,#f2ece4_100%)] p-8 shadow-[0_20px_50px_rgba(0,0,0,0.08)]">
+          <p className="text-[12px] uppercase tracking-[0.18em] text-black/45">
+            Akses booking dibatasi
+          </p>
+
+          <h2 className="mt-3 text-[28px] leading-tight md:text-[34px]">
+            Masuk ke akun Anda sebelum melanjutkan pemesanan.
+          </h2>
+
+          <p className="mt-4 text-[17px] leading-8 text-black/70">
+            Sistem booking AIRISLENS hanya bisa diproses untuk pengguna yang
+            sudah login, sehingga data paket, pembayaran, dan riwayat booking
+            tetap terhubung ke akun yang benar.
+          </p>
+
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Link
+              href={loginHref}
+              className="inline-flex items-center rounded-full bg-black px-6 py-3 text-[16px] text-white transition hover:bg-black/85"
+            >
+              Login sekarang
+            </Link>
+
+            <button
+              type="button"
+              onClick={() => setIsLoginModalOpen(true)}
+              className="inline-flex items-center rounded-full border border-black px-6 py-3 text-[16px] text-black transition hover:bg-black hover:text-white"
+            >
+              Tampilkan pop up lagi
+            </button>
+          </div>
+        </div>
+
+        <LoginRequiredModal
+          open={isLoginModalOpen}
+          loginHref={loginHref}
+          description={loginDescription}
+          onClose={() => setIsLoginModalOpen(false)}
+        />
+      </section>
+    );
+  }
 
   return (
     <section
@@ -1242,6 +1331,13 @@ export default function BookingForm() {
           </div>
         </div>
       </div>
+
+      <LoginRequiredModal
+        open={isLoginModalOpen}
+        loginHref={loginHref}
+        description={loginDescription}
+        onClose={() => setIsLoginModalOpen(false)}
+      />
     </section>
   );
 }
