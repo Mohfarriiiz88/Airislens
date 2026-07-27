@@ -168,13 +168,21 @@ export async function getMidtransPublicConfig(): Promise<{
   clientKey: string | null;
   isProduction: boolean;
 }> {
-  const row = await readMidtransConfigRow();
   const fallback = getMidtransEnvFallback();
 
-  const clientKey = row?.client_key?.trim() || fallback.clientKey;
-  const isProduction = row ? row.is_production === 1 : fallback.isProduction;
+  try {
+    const row = await readMidtransConfigRow();
+    const clientKey = row?.client_key?.trim() || fallback.clientKey;
+    const isProduction = row ? row.is_production === 1 : fallback.isProduction;
 
-  return { clientKey, isProduction };
+    return { clientKey, isProduction };
+  } catch {
+    // Keep public pages buildable even before the database is reachable.
+    return {
+      clientKey: fallback.clientKey,
+      isProduction: fallback.isProduction,
+    };
+  }
 }
 
 export async function getMidtransConfigSummary(): Promise<MidtransConfigSummary> {

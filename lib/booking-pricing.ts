@@ -2,9 +2,11 @@ import "server-only";
 
 import { type RowDataPacket } from "mysql2/promise";
 
+import { parsePackageDurationToMinutes } from "@/lib/booking-time";
 import { getDbPool } from "@/lib/db";
 import { calculateDistanceKm, calculateTransportFee } from "@/lib/distance";
 import { ensurePartnerCmsSchema } from "@/lib/partner-cms";
+import { calculateBookingTotals } from "@/lib/service-fee";
 
 type BookingPricingRow = RowDataPacket & {
   photographer_user_id: number;
@@ -14,8 +16,12 @@ type BookingPricingRow = RowDataPacket & {
   longitude: number | null;
   free_distance_km: number;
   transport_fee_per_km: number;
+  category_id: number | null;
+  category_name: string | null;
+  category_slug: string | null;
   package_id: number;
   package_name: string;
+  package_duration: string;
   package_price: number;
 };
 
@@ -31,6 +37,7 @@ export class BookingPricingError extends Error {
 
 export type BookingQuoteInput = {
   photographerUserId: number;
+  categoryId?: number | null;
   packageId: number;
   eventAddress: string;
   eventLatitude: number;
@@ -44,13 +51,21 @@ export type BookingQuote = {
   eventAddress: string;
   eventLatitude: number;
   eventLongitude: number;
+  categoryId: number | null;
+  categoryName: string | null;
+  categorySlug: string | null;
   packageId: number;
   packageName: string;
+  packageDuration: string;
+  packageDurationMinutes: number;
   packagePrice: number;
   distanceKm: number;
   freeDistanceKm: number;
   transportFeePerKm: number;
   transportFee: number;
+  serviceFeeRate: number;
+  serviceFee: number;
+  photographerPayoutAmount: number;
   totalPrice: number;
   amount: number;
 };
@@ -84,12 +99,32 @@ export async function getBookingQuote(input: BookingQuoteInput) {
     throw new BookingPricingError("Paket tidak valid.", 400);
   }
 
+  if (
+    input.categoryId !== undefined &&
+    input.categoryId !== null &&
+    (!Number.isInteger(input.categoryId) || input.categoryId <= 0)
+  ) {
+    throw new BookingPricingError("Kategori layanan tidak valid.", 400);
+  }
+
   ensureCoordinateRange(input.eventLatitude, -90, 90, "Latitude acara");
   ensureCoordinateRange(input.eventLongitude, -180, 180, "Longitude acara");
 
   await ensurePartnerCmsSchema();
 
   const pool = getDbPool();
+  const params: number[] = [input.photographerUserId, input.packageId];
+  let categoryClause = "";
+
+  if (
+    typeof input.categoryId === "number" &&
+    Number.isInteger(input.categoryId) &&
+    input.categoryId > 0
+  ) {
+    categoryClause = "AND pkg.category_id = ?";
+    params.push(input.categoryId);
+  }
+
   const [rows] = await pool.execute<BookingPricingRow[]>(
     `
       SELECT
@@ -100,19 +135,27 @@ export async function getBookingQuote(input: BookingQuoteInput) {
         p.longitude,
         p.free_distance_km,
         p.transport_fee_per_km,
+        pkg.category_id,
+        cat.name AS category_name,
+        cat.slug AS category_slug,
         pkg.id AS package_id,
         pkg.name AS package_name,
+        pkg.duration AS package_duration,
         pkg.price AS package_price
       FROM partner_profiles p
       INNER JOIN users u ON u.id = p.user_id
       INNER JOIN partner_packages pkg
         ON pkg.user_id = p.user_id
+      LEFT JOIN partner_categories cat
+        ON cat.id = pkg.category_id
+       AND cat.user_id = p.user_id
       WHERE u.role = 'admin'
         AND p.user_id = ?
         AND pkg.id = ?
+        ${categoryClause}
       LIMIT 1
     `,
-    [input.photographerUserId, input.packageId]
+    params
   );
 
   const row = rows[0];
@@ -120,6 +163,18 @@ export async function getBookingQuote(input: BookingQuoteInput) {
   if (!row) {
     throw new BookingPricingError(
       "Paket atau fotografer yang dipilih tidak ditemukan.",
+      404
+    );
+  }
+
+  if (
+    typeof input.categoryId === "number" &&
+    input.categoryId > 0 &&
+    row.category_id !== null &&
+    Number(row.category_id) !== input.categoryId
+  ) {
+    throw new BookingPricingError(
+      "Kategori layanan tidak cocok dengan paket yang dipilih.",
       404
     );
   }
@@ -140,12 +195,29 @@ export async function getBookingQuote(input: BookingQuoteInput) {
   const freeDistanceKm = Number(row.free_distance_km ?? 5);
   const transportFeePerKm = Number(row.transport_fee_per_km ?? 3000);
   const packagePrice = Number(row.package_price ?? 0);
+  const packageDuration = row.package_duration?.trim() ?? "";
+  let packageDurationMinutes: number;
+
+  try {
+    packageDurationMinutes = parsePackageDurationToMinutes(packageDuration);
+  } catch (error) {
+    throw new BookingPricingError(
+      error instanceof Error
+        ? `Durasi paket tidak valid: ${error.message}`
+        : "Durasi paket tidak valid.",
+      400
+    );
+  }
+
   const transportFee = calculateTransportFee(
     distanceKm,
     freeDistanceKm,
     transportFeePerKm
   );
-  const totalPrice = packagePrice + transportFee;
+  const totals = calculateBookingTotals({
+    packagePrice,
+    transportFee,
+  });
 
   return {
     photographerUserId: row.photographer_user_id,
@@ -154,14 +226,22 @@ export async function getBookingQuote(input: BookingQuoteInput) {
     eventAddress,
     eventLatitude: input.eventLatitude,
     eventLongitude: input.eventLongitude,
+    categoryId: row.category_id === null ? null : Number(row.category_id),
+    categoryName: row.category_name,
+    categorySlug: row.category_slug,
     packageId: row.package_id,
     packageName: row.package_name,
+    packageDuration,
+    packageDurationMinutes,
     packagePrice,
     distanceKm,
     freeDistanceKm,
     transportFeePerKm,
-    transportFee,
-    totalPrice,
-    amount: totalPrice,
+    transportFee: totals.transportFee,
+    serviceFeeRate: totals.serviceFeeRate,
+    serviceFee: totals.serviceFee,
+    photographerPayoutAmount: totals.photographerPayoutAmount,
+    totalPrice: totals.totalPrice,
+    amount: totals.totalPrice,
   } satisfies BookingQuote;
 }

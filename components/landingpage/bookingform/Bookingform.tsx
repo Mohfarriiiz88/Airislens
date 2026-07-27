@@ -6,7 +6,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import LoginRequiredModal from "@/components/ui/LoginRequiredModal";
-import { BOOKING_TIME_SLOTS } from "@/lib/time-slots";
 
 const BookingLocationMap = dynamic(
   () => import("@/components/landingpage/bookingform/BookingLocationMap"),
@@ -31,6 +30,7 @@ const BookingLocationMap = dynamic(
 type BookingFormState = {
   name: string;
   phone: string;
+  category: string | number;
   package: string | number;
   date: string;
   time: string;
@@ -40,8 +40,17 @@ type BookingFormState = {
   note: string;
 };
 
+type PartnerCategory = {
+  id: number;
+  name: string;
+  slug: string;
+};
+
 type PartnerPackage = {
   id: number;
+  categoryId: number | null;
+  categoryName: string | null;
+  categorySlug: string | null;
   name: string;
   duration: string;
   price: number;
@@ -61,6 +70,9 @@ type BookingQuote = {
   eventAddress: string;
   eventLatitude: number;
   eventLongitude: number;
+  categoryId: number | null;
+  categoryName: string | null;
+  categorySlug: string | null;
   packageId: number;
   packageName: string;
   packagePrice: number;
@@ -68,13 +80,23 @@ type BookingQuote = {
   freeDistanceKm: number;
   transportFeePerKm: number;
   transportFee: number;
+  serviceFeeRate: number;
+  serviceFee: number;
+  photographerPayoutAmount: number;
   totalPrice: number;
   amount: number;
 };
 
 type TimeSlotAvailabilitySummary = {
   time: string;
-  status: "available" | "limited" | "full" | "blocked";
+  endTime: string;
+  rangeLabel: string;
+  status:
+    | "available"
+    | "full"
+    | "closed"
+    | "conflict"
+    | "outside_working_hours";
   activeBookings: number;
   teamQuota: number;
   remainingQuota: number;
@@ -158,27 +180,43 @@ function getTimeSlotErrorMessage(slot?: TimeSlotAvailabilitySummary | null) {
     return null;
   }
 
-  if (slot.status === "blocked") {
+  if (slot.status === "closed") {
     return "Slot ditutup oleh partner.";
   }
 
   if (slot.status === "full") {
-    return "Kuota pada jam ini sudah penuh.";
+    return "Kuota pada rentang waktu ini sudah penuh.";
+  }
+
+  if (slot.status === "outside_working_hours") {
+    return "Rentang waktu ini melewati jam kerja partner.";
+  }
+
+  if (slot.status === "conflict") {
+    return "Rentang waktu ini bentrok dengan jadwal lain.";
   }
 
   return null;
 }
 
 function getTimeSlotLabel(slot: TimeSlotAvailabilitySummary) {
-  if (slot.status === "blocked") {
-    return "Ditutup";
+  if (slot.status === "closed") {
+    return "Ditutup partner";
   }
 
   if (slot.status === "full") {
     return "Penuh";
   }
 
-  if (slot.status === "limited") {
+  if (slot.status === "outside_working_hours") {
+    return "Di luar jam kerja";
+  }
+
+  if (slot.status === "conflict") {
+    return "Bentrok";
+  }
+
+  if (slot.activeBookings > 0) {
     return `Sisa ${slot.remainingQuota} slot`;
   }
 
@@ -193,6 +231,7 @@ export default function BookingForm({
   const [form, setForm] = useState<BookingFormState>({
     name: "",
     phone: "",
+    category: "" as string | number,
     package: "" as string | number,
     date: "",
     time: "",
@@ -201,6 +240,7 @@ export default function BookingForm({
     eventLongitude: "",
     note: "",
   });
+  const [categories, setCategories] = useState<PartnerCategory[]>([]);
   const [packages, setPackages] = useState<PartnerPackage[]>([]);
   const [partner, setPartner] = useState<PartnerSummary | null>(null);
   const [quote, setQuote] = useState<BookingQuote | null>(null);
@@ -226,8 +266,10 @@ export default function BookingForm({
   const hasEditedNameRef = useRef(false);
 
   const searchParams = useSearchParams();
-  const fgId = searchParams.get("fg");
-  const packageParam = searchParams.get("package");
+  const photographerIdParam =
+    searchParams.get("photographerId") ?? searchParams.get("fg");
+  const categoryParam = searchParams.get("categoryId");
+  const packageParam = searchParams.get("packageId") ?? searchParams.get("package");
   const bookingQueryString = searchParams.toString();
   const loginRedirectTarget = bookingQueryString
     ? `/bookingform?${bookingQueryString}`
@@ -306,7 +348,7 @@ export default function BookingForm({
       return;
     }
 
-    if (!fgId) {
+    if (!photographerIdParam) {
       setLoading(false);
       setError("Tidak ada fotografer yang dipilih. Silakan kembali ke halaman FindFG.");
       return;
@@ -317,7 +359,7 @@ export default function BookingForm({
         setLoading(true);
         setError(null);
 
-        const res = await fetch(`/api/packages/${fgId}`, {
+        const res = await fetch(`/api/packages/${photographerIdParam}`, {
           cache: "no-store",
         });
 
@@ -325,6 +367,7 @@ export default function BookingForm({
           | {
               message?: string;
               partner?: PartnerSummary | null;
+              categories?: PartnerCategory[];
               packages?: PartnerPackage[];
             }
           | null;
@@ -333,29 +376,44 @@ export default function BookingForm({
           throw new Error(data?.message || `API error: ${res.status}`);
         }
 
+        const nextCategories = data?.categories ?? [];
         const nextPackages = data?.packages ?? [];
+        const requestedCategoryId = Number(categoryParam);
         const selectedPackageId = Number(packageParam);
-        const hasRequestedPackage = nextPackages.some(
-          (item) => item.id === selectedPackageId
+        const requestedPackage =
+          nextPackages.find((item) => item.id === selectedPackageId) ?? null;
+        const hasRequestedCategory = nextCategories.some(
+          (item) => item.id === requestedCategoryId
         );
+        const nextCategoryId =
+          requestedPackage?.categoryId ??
+          (hasRequestedCategory ? requestedCategoryId : nextCategories[0]?.id ?? "");
 
         setPartner(data?.partner ?? null);
+        setCategories(nextCategories);
         setPackages(nextPackages);
         setForm((prev) => ({
           ...prev,
+          category: nextCategoryId,
+          time: "",
           package:
-            hasRequestedPackage && selectedPackageId > 0
+            requestedPackage &&
+            requestedPackage.categoryId !== null &&
+            requestedPackage.categoryId === nextCategoryId
               ? selectedPackageId
-              : nextPackages[0]?.id ?? "",
+              : "",
         }));
 
-        if (nextPackages.length === 0) {
+        if (nextCategories.length === 0) {
+          setError("Fotografer ini belum memiliki kategori layanan aktif.");
+        } else if (nextPackages.length === 0) {
           setError("Fotografer ini belum memiliki paket aktif.");
         }
       } catch (err) {
         console.error("Error fetching packages:", err);
         setError(err instanceof Error ? err.message : "Gagal memuat data paket.");
         setPartner(null);
+        setCategories([]);
         setPackages([]);
       } finally {
         setLoading(false);
@@ -363,10 +421,30 @@ export default function BookingForm({
     };
 
     void fetchPackages();
-  }, [fgId, isAuthenticated, mounted, packageParam]);
+  }, [categoryParam, isAuthenticated, mounted, packageParam, photographerIdParam]);
+
+  const selectedCategory = useMemo(() => {
+    return categories.find((item) => item.id === Number(form.category)) ?? null;
+  }, [categories, form.category]);
+  const visiblePackages = useMemo(() => {
+    if (!selectedCategory) {
+      return [];
+    }
+
+    return packages.filter((item) => item.categoryId === selectedCategory.id);
+  }, [packages, selectedCategory]);
+  const selectedPackage = useMemo(() => {
+    return packages.find((item) => item.id === Number(form.package)) ?? null;
+  }, [form.package, packages]);
 
   useEffect(() => {
-    if (!mounted || !isAuthenticated || !fgId || !form.date) {
+    if (
+      !mounted ||
+      !isAuthenticated ||
+      !photographerIdParam ||
+      !selectedPackage ||
+      !form.date
+    ) {
       setUnavailableTimes([]);
       setTimeSlotSummaries([]);
       setAvailabilityError(null);
@@ -383,7 +461,7 @@ export default function BookingForm({
 
       try {
         const response = await fetch(
-          `/api/availability?fg=${encodeURIComponent(fgId)}&date=${encodeURIComponent(form.date)}`,
+          `/api/availability?photographerId=${encodeURIComponent(photographerIdParam)}&packageId=${encodeURIComponent(selectedPackage.id)}&date=${encodeURIComponent(form.date)}`,
           {
             cache: "no-store",
           }
@@ -440,32 +518,53 @@ export default function BookingForm({
     return () => {
       ignore = true;
     };
-  }, [fgId, form.date, form.time, isAuthenticated, mounted]);
-
-  const selectedPackage = useMemo(() => {
-    return packages.find((item) => item.id === Number(form.package)) ?? null;
-  }, [form.package, packages]);
+  }, [
+    form.date,
+    form.time,
+    isAuthenticated,
+    mounted,
+    photographerIdParam,
+    selectedPackage,
+  ]);
 
   const slotSummaryMap = useMemo(() => {
     return Object.fromEntries(timeSlotSummaries.map((item) => [item.time, item]));
   }, [timeSlotSummaries]);
+  const timeSlotOptions = useMemo(
+    () => timeSlotSummaries.map((item) => item.time),
+    [timeSlotSummaries]
+  );
 
   const slotOptionLabels = useMemo(() => {
     return Object.fromEntries(
-      BOOKING_TIME_SLOTS.map((time) => {
-        const slot = slotSummaryMap[time];
+      timeSlotSummaries.map((summary) => {
+        const time = summary.time;
+        const currentSlot = slotSummaryMap[time];
 
-        if (!slot) {
+        if (!currentSlot) {
           return [time, time];
         }
 
-        return [time, `${time} - ${getTimeSlotLabel(slot)}`];
+        return [
+          time,
+          `${currentSlot.rangeLabel} - ${getTimeSlotLabel(currentSlot)}`,
+        ];
       })
     ) as Record<string, string>;
-  }, [slotSummaryMap]);
+  }, [slotSummaryMap, timeSlotSummaries]);
+  const selectedTimeSlot = useMemo(
+    () => slotSummaryMap[form.time] ?? null,
+    [form.time, slotSummaryMap]
+  );
 
   useEffect(() => {
-    if (!mounted || !isAuthenticated || !fgId || !selectedPackage) {
+    if (
+      !mounted ||
+      !isAuthenticated ||
+      !photographerIdParam ||
+      !selectedCategory ||
+      !selectedPackage
+    ) {
       setQuote(null);
       setQuoteError(null);
       setQuoteLoading(false);
@@ -503,7 +602,8 @@ export default function BookingForm({
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            photographerId: Number(fgId),
+            photographerId: Number(photographerIdParam),
+            categoryId: selectedCategory.id,
             packageId: selectedPackage.id,
             eventAddress,
             eventLatitude,
@@ -546,12 +646,13 @@ export default function BookingForm({
       window.clearTimeout(timeoutId);
     };
   }, [
-    fgId,
     form.eventAddress,
     form.eventLatitude,
     form.eventLongitude,
     isAuthenticated,
     mounted,
+    photographerIdParam,
+    selectedCategory,
     selectedPackage,
   ]);
 
@@ -561,9 +662,10 @@ export default function BookingForm({
 
   const handleTimeChange = (value: string) => {
     update("time", value);
+    const slot = slotSummaryMap[value];
     setTimeError(
-      unavailableTimes.includes(value)
-        ? getTimeSlotErrorMessage(slotSummaryMap[value]) || "Sudah terbooking"
+      slot && slot.status !== "available"
+        ? getTimeSlotErrorMessage(slot) || "Jadwal tidak tersedia."
         : null
     );
   };
@@ -571,6 +673,33 @@ export default function BookingForm({
   const handleNameChange = (value: string) => {
     hasEditedNameRef.current = true;
     update("name", value);
+  };
+
+  const handleCategoryChange = (value: number) => {
+    setForm((prev) => ({
+      ...prev,
+      category: value,
+      package: "",
+      time: "",
+    }));
+    setUnavailableTimes([]);
+    setTimeSlotSummaries([]);
+    setTimeError(null);
+    setQuote(null);
+    setQuoteError(null);
+    setPaymentFeedback(null);
+  };
+
+  const handlePackageChange = (value: number) => {
+    setForm((prev) => ({
+      ...prev,
+      package: value,
+      time: "",
+    }));
+    setTimeError(null);
+    setQuote(null);
+    setQuoteError(null);
+    setPaymentFeedback(null);
   };
 
   const handleUseCurrentLocation = () => {
@@ -699,7 +828,15 @@ export default function BookingForm({
     if (!form.date || !form.time) {
       setPaymentFeedback({
         tone: "error",
-        message: "Tanggal dan jam booking wajib dipilih.",
+        message: "Tanggal dan jam mulai booking wajib dipilih.",
+      });
+      return;
+    }
+
+    if (!selectedCategory) {
+      setPaymentFeedback({
+        tone: "error",
+        message: "Pilih kategori layanan terlebih dahulu.",
       });
       return;
     }
@@ -747,10 +884,13 @@ export default function BookingForm({
     }
 
     if (unavailableTimes.includes(form.time)) {
-      setTimeError(getTimeSlotErrorMessage(slotSummaryMap[form.time]) || "Sudah terbooking");
+      setTimeError(
+        getTimeSlotErrorMessage(slotSummaryMap[form.time]) ||
+          "Jadwal tidak tersedia."
+      );
       setPaymentFeedback({
         tone: "error",
-        message: "Jam yang dipilih sudah tidak tersedia.",
+        message: "Jam mulai yang dipilih sudah tidak tersedia.",
       });
       return;
     }
@@ -767,8 +907,9 @@ export default function BookingForm({
           name: form.name,
           phone: form.phone,
           amount: quote.totalPrice,
+          categoryId: selectedCategory.id,
           packageId: selectedPackage.id,
-          photographerId: Number(fgId),
+          photographerId: Number(photographerIdParam),
           date: form.date,
           time: form.time,
           eventAddress: form.eventAddress,
@@ -929,49 +1070,109 @@ export default function BookingForm({
         </h1>
 
         <p className="mt-2 max-w-2xl text-[18px] md:text-[20px]">
-          Pilih paket, isi alamat acara beserta titik koordinatnya, lalu sistem
-          akan menghitung biaya transport sebelum pembayaran dikonfirmasi.
+          Isi data pemesan terlebih dahulu, lalu pilih kategori layanan, paket,
+          dan detail acara sampai sistem menghitung total biaya booking secara
+          otomatis.
         </p>
       </div>
 
       <div className="grid gap-10 md:grid-cols-[1fr_420px]">
         <div className="space-y-6 text-[18px]">
-          <div className="grid gap-4 md:grid-cols-2">
-            <Input
-              label="Full Name"
-              placeholder="Your name"
-              value={form.name}
-              onChange={handleNameChange}
-            />
-            <Input
-              label="WhatsApp Number"
-              placeholder="08xxxx"
-              value={form.phone}
-              onChange={(value) => update("phone", value)}
-            />
+          <div>
+            <p className="mb-3">1. Data Pemesan</p>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <Input
+                label="Nama Pemesan"
+                placeholder="Nama lengkap"
+                value={form.name}
+                onChange={handleNameChange}
+              />
+              <Input
+                label="Nomor WhatsApp"
+                placeholder="08xxxx"
+                value={form.phone}
+                onChange={(value) => update("phone", value)}
+              />
+            </div>
           </div>
 
           <div>
-            <p className="mb-3">Select Package</p>
+            <p className="mb-3">2. Pilih Kategori Layanan</p>
 
             {error && (
               <p className="mb-3 text-sm text-red-500">{error}</p>
             )}
 
             {loading && (
-              <p className="text-sm text-gray-400">Loading packages...</p>
+              <p className="text-sm text-gray-400">
+                Memuat kategori dan paket...
+              </p>
             )}
 
-            {!loading && packages.length > 0 && (
+            {!loading && categories.length > 0 && (
+              <div className="flex flex-wrap gap-3">
+                {categories.map((item) => {
+                  const active = Number(form.category) === Number(item.id);
+
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => handleCategoryChange(Number(item.id))}
+                      className={`rounded-full border px-4 py-2 text-sm transition ${
+                        active
+                          ? "border-black bg-black text-white"
+                          : "border-black/10 bg-white text-black hover:border-black"
+                      }`}
+                    >
+                      {item.name}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {!loading && categories.length === 0 && !error && (
+              <p className="mt-2 text-sm text-gray-400">
+                Fotografer ini belum memiliki kategori layanan.
+              </p>
+            )}
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="rounded-[24px] border border-black/10 bg-[#faf7f2] px-5 py-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-black/45">
+                Kategori aktif
+              </p>
+              <p className="mt-2 text-[22px] text-black">
+                {selectedCategory?.name || "-"}
+              </p>
+            </div>
+
+            <div className="rounded-[24px] border border-black/10 bg-[#faf7f2] px-5 py-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-black/45">
+                Paket terpilih
+              </p>
+              <p className="mt-2 text-[22px] text-black">
+                {selectedPackage?.name || "Belum dipilih"}
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <p className="mb-3">3. Pilih Paket</p>
+
+            {!loading && selectedCategory && visiblePackages.length > 0 && (
               <div className="grid gap-4 md:grid-cols-3">
-                {packages.map((item) => {
+                {visiblePackages.map((item) => {
                   const active = Number(form.package) === Number(item.id);
 
                   return (
                     <button
                       key={item.id}
                       type="button"
-                      onClick={() => update("package", Number(item.id))}
+                      onClick={() => handlePackageChange(Number(item.id))}
                       className={`rounded-md border p-4 text-left transition ${
                         active
                           ? "border-black bg-black text-white"
@@ -989,9 +1190,15 @@ export default function BookingForm({
               </div>
             )}
 
-            {!loading && packages.length === 0 && !error && (
+            {!loading && selectedCategory && visiblePackages.length === 0 && !error && (
               <p className="mt-2 text-sm text-gray-400">
-                No packages available for this photographer.
+                Belum ada paket pada kategori {selectedCategory.name}.
+              </p>
+            )}
+
+            {!loading && !selectedCategory && categories.length > 0 && (
+              <p className="mt-2 text-sm text-gray-400">
+                Pilih kategori terlebih dahulu untuk melihat paket yang tersedia.
               </p>
             )}
           </div>
@@ -999,14 +1206,14 @@ export default function BookingForm({
           <div className="grid gap-4 md:grid-cols-2">
             <Input
               type="date"
-              label="Date"
+              label="4. Tanggal"
               value={form.date}
               onChange={(value) => update("date", value)}
             />
 
             <Select
-              label="Time"
-              options={BOOKING_TIME_SLOTS}
+              label="4. Jam Mulai"
+              options={timeSlotOptions}
               value={form.time}
               onChange={handleTimeChange}
               disabledOptions={unavailableTimes}
@@ -1015,9 +1222,16 @@ export default function BookingForm({
             />
           </div>
 
-          {form.date && (
+          {!selectedPackage && form.date && (
+            <p className="text-sm text-gray-400">
+              Pilih paket terlebih dahulu agar sistem menampilkan slot jam mulai
+              sesuai durasi paket.
+            </p>
+          )}
+
+          {selectedPackage && form.date && (
             <div className="space-y-4 text-sm text-gray-500">
-              {availabilityLoading && <p>Checking availability...</p>}
+              {availabilityLoading && <p>Memeriksa ketersediaan jadwal...</p>}
               {!availabilityLoading && availabilityError && (
                 <p className="text-red-500">{availabilityError}</p>
               )}
@@ -1029,22 +1243,21 @@ export default function BookingForm({
                       <span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700">
                         Tersedia
                       </span>
-                      <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-700">
-                        Hampir penuh
-                      </span>
                       <span className="rounded-full bg-rose-50 px-3 py-1 text-rose-700">
                         Penuh
                       </span>
                       <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-700">
                         Ditutup partner
                       </span>
+                      <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-700">
+                        Di luar jam kerja
+                      </span>
                     </div>
 
                     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                       {timeSlotSummaries.map((slot) => {
                         const isSelected = form.time === slot.time;
-                        const isDisabled =
-                          slot.status === "blocked" || slot.status === "full";
+                        const isDisabled = slot.status !== "available";
 
                         return (
                           <button
@@ -1057,31 +1270,35 @@ export default function BookingForm({
                                 ? "border-black bg-black text-white"
                                 : slot.status === "available"
                                   ? "border-emerald-200 bg-emerald-50 text-emerald-800 hover:border-emerald-400"
-                                  : slot.status === "limited"
-                                    ? "border-amber-200 bg-amber-50 text-amber-800 hover:border-amber-400"
-                                    : slot.status === "blocked"
+                                  : slot.status === "closed"
                                       ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-500"
-                                      : "cursor-not-allowed border-rose-200 bg-rose-50 text-rose-600"
+                                      : slot.status === "outside_working_hours"
+                                        ? "cursor-not-allowed border-amber-200 bg-amber-50 text-amber-700"
+                                        : "cursor-not-allowed border-rose-200 bg-rose-50 text-rose-600"
                             }`}
                           >
                             <div className="flex items-start justify-between gap-3">
-                              <span className="text-base font-medium">{slot.time}</span>
+                              <span className="text-base font-medium">
+                                {slot.rangeLabel}
+                              </span>
                               <span className="text-[11px] uppercase tracking-[0.12em]">
                                 {slot.status === "available"
                                   ? "Open"
-                                  : slot.status === "limited"
-                                    ? "Limited"
-                                    : slot.status === "blocked"
+                                  : slot.status === "closed"
                                       ? "Closed"
-                                      : "Full"}
+                                      : slot.status === "outside_working_hours"
+                                        ? "Outside"
+                                        : "Full"}
                               </span>
                             </div>
                             <p className="mt-2 text-sm">
                               {getTimeSlotLabel(slot)}
                             </p>
                             <p className="mt-1 text-xs opacity-80">
-                              {slot.status === "blocked"
+                              {slot.status === "closed"
                                 ? "Partner menutup slot ini secara manual."
+                                : slot.status === "outside_working_hours"
+                                  ? "Rentang sesi melewati batas jam kerja partner."
                                 : `${slot.activeBookings}/${slot.teamQuota} booking aktif`}
                             </p>
                           </button>
@@ -1094,7 +1311,7 @@ export default function BookingForm({
           )}
 
           <Textarea
-            label="Event Address"
+            label="5. Lokasi Pemotretan"
             value={form.eventAddress}
             onChange={(value) => {
               update("eventAddress", value);
@@ -1235,7 +1452,7 @@ export default function BookingForm({
           )}
 
           <Textarea
-            label="Notes (optional)"
+            label="6. Catatan (opsional)"
             value={form.note}
             onChange={(value) => update("note", value)}
           />
@@ -1247,8 +1464,9 @@ export default function BookingForm({
               loading ||
               submitLoading ||
               quoteLoading ||
+              !selectedCategory ||
               !selectedPackage ||
-              !fgId ||
+              !photographerIdParam ||
               !mounted ||
               !quote
             }
@@ -1256,8 +1474,9 @@ export default function BookingForm({
               loading ||
               submitLoading ||
               quoteLoading ||
+              !selectedCategory ||
               !selectedPackage ||
-              !fgId ||
+              !photographerIdParam ||
               !mounted ||
               !quote
                 ? "cursor-not-allowed bg-gray-400"
@@ -1265,41 +1484,50 @@ export default function BookingForm({
             }`}
           >
             {submitLoading
-              ? "Processing..."
+              ? "Memproses..."
               : quoteLoading
                 ? "Menghitung total..."
-                : "Pay & Book"}
+                : "Bayar & Booking"}
           </button>
         </div>
 
         <div className="h-fit rounded-md border border-gray-200 p-6">
-          <p className="mb-4 text-[18px] font-medium">Checkout Summary</p>
+          <p className="mb-4 text-[18px] font-medium">Ringkasan Pembayaran</p>
 
           <div className="space-y-3 text-sm">
             <Row
-              label="Photographer"
+              label="Fotografer"
               value={quote?.brandName || partner?.brandName || "-"}
             />
             <Row
-              label="Photographer Address"
+              label="Alamat Fotografer"
               value={quote?.photographerAddress || partner?.address || "-"}
             />
-            <Row label="Package" value={selectedPackage?.name || "-"} />
-            <Row label="Duration" value={selectedPackage?.duration || "-"} />
-            <Row label="Event Address" value={form.eventAddress || "-"} />
             <Row
-              label="Event Point"
+              label="Kategori Layanan"
+              value={selectedCategory?.name || quote?.categoryName || "-"}
+            />
+            <Row label="Paket Layanan" value={selectedPackage?.name || "-"} />
+            <Row label="Durasi" value={selectedPackage?.duration || "-"} />
+            <Row label="Alamat Acara" value={form.eventAddress || "-"} />
+            <Row
+              label="Titik Acara"
               value={
                 form.eventLatitude && form.eventLongitude
                   ? `${form.eventLatitude}, ${form.eventLongitude}`
                   : "-"
               }
             />
-            <Row label="Date" value={form.date || "-"} />
-            <Row label="Time" value={form.time || "-"} />
+            <Row label="Tanggal" value={form.date || "-"} />
+            <Row
+              label="Jam Mulai"
+              value={
+                selectedTimeSlot?.rangeLabel || form.time || "-"
+              }
+            />
             <div className="mt-3 border-t border-gray-200 pt-3">
               <Row
-                label="Package Price"
+                label="Harga Paket"
                 value={
                   quote
                     ? formatCurrency(quote.packagePrice)
@@ -1309,15 +1537,23 @@ export default function BookingForm({
                 }
               />
               <Row
-                label="Distance"
+                label="Jarak"
                 value={quote ? `${quote.distanceKm.toFixed(2)} km` : "-"}
               />
               <Row
-                label="Transport Fee"
+                label="Biaya Transportasi"
                 value={quote ? formatCurrency(quote.transportFee) : "-"}
               />
               <Row
-                label="Total Payment"
+                label={
+                  quote
+                    ? `Biaya Layanan ${quote.serviceFeeRate}%`
+                    : "Biaya Layanan"
+                }
+                value={quote ? formatCurrency(quote.serviceFee) : "-"}
+              />
+              <Row
+                label="Total Pembayaran"
                 value={quote ? formatCurrency(quote.totalPrice) : "-"}
               />
             </div>

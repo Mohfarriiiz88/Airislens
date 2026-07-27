@@ -9,6 +9,9 @@ erDiagram
         VARCHAR phone
         TEXT password_hash
         ENUM role
+        DATETIME email_verified_at
+        VARCHAR verification_token
+        DATETIME verification_expires_at
         TIMESTAMP created_at
         TIMESTAMP updated_at
     }
@@ -47,9 +50,19 @@ erDiagram
         TIMESTAMP updated_at
     }
 
+    PARTNER_CATEGORIES {
+        BIGINT id PK
+        BIGINT user_id FK
+        VARCHAR name
+        VARCHAR slug
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+    }
+
     PARTNER_PACKAGES {
         BIGINT id PK
         BIGINT user_id FK
+        BIGINT category_id FK
         VARCHAR name
         VARCHAR duration
         BIGINT price
@@ -88,6 +101,7 @@ erDiagram
         VARCHAR order_id UK
         BIGINT photographer_user_id FK
         BIGINT customer_user_id FK
+        BIGINT category_id
         BIGINT package_id FK
         VARCHAR customer_name
         VARCHAR customer_phone
@@ -95,6 +109,7 @@ erDiagram
         BIGINT amount
         DATE booking_date
         VARCHAR booking_time
+        TIME booking_end_time
         TEXT location
         TEXT event_address
         DECIMAL event_latitude
@@ -102,6 +117,8 @@ erDiagram
         DECIMAL distance_km
         BIGINT transport_fee
         BIGINT package_price
+        DECIMAL service_fee_rate
+        INT service_fee
         BIGINT total_price
         TEXT note
         ENUM status
@@ -230,11 +247,13 @@ erDiagram
 
     USERS ||--o| PARTNER_PROFILES : owns
     USERS ||--o{ PARTNER_GALLERY_ITEMS : uploads
+    USERS ||--o{ PARTNER_CATEGORIES : owns_service_categories
     USERS ||--o{ PARTNER_PACKAGES : offers
     USERS ||--o{ PARTNER_SCHEDULES : blocks_time_for
     USERS ||--o{ PARTNER_APPLICATIONS : submits
     USERS ||--o{ BOOKINGS : receives_as_photographer
     USERS ||--o{ BOOKINGS : creates_as_customer
+    PARTNER_CATEGORIES ||--o{ PARTNER_PACKAGES : groups
     PARTNER_PACKAGES ||--o{ BOOKINGS : selected_in
 
     BOOKINGS ||--|| PAYMENTS : has
@@ -259,8 +278,12 @@ erDiagram
 - Foreign key fisik yang sudah diterapkan ke database live tetap dirujuk oleh migration `database/migrations/2026-06-24_02_add_foreign_keys.sql`.
 - Refactor identitas `partner_applications` ke `users` dirujuk oleh migration `database/migrations/2026-06-25_01_refactor_partner_applications_identity.sql`.
 - `PARTNER_APPLICATIONS` hanya menyimpan data khusus pengajuan partner. Nama, email, dan nomor telepon pemohon diambil dari `USERS` lewat relasi `submitted_by_user_id`.
+- `USERS.email_verified_at` menandai kapan akun selesai verifikasi email. `verification_token` menyimpan hash token verifikasi aktif dan `verification_expires_at` menyimpan masa berlakunya.
 - `PARTNER_PROFILES.partner_type` membedakan partner perorangan dan studio. `team_quota` menentukan berapa booking aktif yang masih bisa diterima di slot jam yang sama.
+- `PARTNER_CATEGORIES` menyimpan katalog kategori layanan milik masing-masing fotografer, misalnya Wedding atau Prewedding.
+- `PARTNER_PACKAGES.category_id` menghubungkan setiap paket ke kategori layanan yang dipilih fotografer.
 - `PARTNER_PROFILES.commission_rate` adalah snapshot persentase komisi default untuk booking baru partner tersebut.
+- `BOOKINGS.category_id` disimpan sebagai snapshot kategori layanan saat booking dibuat. Kolom ini sengaja diperlakukan sebagai snapshot transaksi dan tidak wajib selalu ikut foreign key fisik.
 - `BOOKINGS.package_name` tetap disimpan sebagai snapshot nama paket saat transaksi dibuat.
 - `BOOKINGS.location` dipertahankan untuk kompatibilitas sistem lama, sedangkan data lokasi acara baru disimpan juga di `event_address`, `event_latitude`, dan `event_longitude`.
 - `PAYMENTS` adalah sumber kebenaran untuk status transaksi gateway, sedangkan `BOOKINGS.status` dipakai untuk status proses bisnis booking.

@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { Eye, EyeClosed } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type AuthTab = "login" | "register";
 
@@ -31,6 +31,17 @@ export default function LoginPageClient() {
   const [showPassword, setShowPassword] = useState(false);
 
   const nextPath = getSafeNextPath(searchParams.get("next"));
+  const verifiedFlag = searchParams.get("verified");
+
+  useEffect(() => {
+    if (verifiedFlag !== "1") {
+      return;
+    }
+
+    setActiveTab("login");
+    setIsError(false);
+    setMessage("Email berhasil diverifikasi. Silakan login.");
+  }, [verifiedFlag]);
 
   function getRedirectPath(role?: string) {
     if (role === "superadmin") {
@@ -101,6 +112,17 @@ export default function LoginPageClient() {
             ? "Login berhasil."
             : "Akun berhasil dibuat.")
       );
+
+      if (activeTab === "register") {
+        setActiveTab("login");
+        setShowPassword(false);
+        setForm((prev) => ({
+          name: "",
+          email: prev.email,
+          password: "",
+        }));
+        return;
+      }
 
       const redirectPath = getRedirectPath(data.user?.role);
 
@@ -267,7 +289,7 @@ export default function LoginPageClient() {
 
             {activeTab === "register" && (
               <p className="text-xs text-gray-500">
-                Register membuat akun dengan role default user.
+                Register membuat akun dengan role default user dan wajib verifikasi email sebelum login.
               </p>
             )}
 

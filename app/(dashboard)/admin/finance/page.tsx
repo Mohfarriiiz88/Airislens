@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+import { formatBookingTimeWindow } from "@/lib/booking-time";
+
 type PartnerWallet = {
   availableBalance: number;
   pendingWithdrawalBalance: number;
@@ -26,6 +28,7 @@ type PartnerSettlement = {
   customerName: string;
   bookingDate: string;
   bookingTime: string;
+  bookingEndTime: string | null;
   grossAmount: number;
   commissionAmount: number;
   netPartnerAmount: number;
@@ -90,6 +93,21 @@ function formatDate(value: string | null) {
     dateStyle: "medium",
     timeStyle: "short",
   });
+}
+
+function formatBookingSchedule(
+  date: string,
+  time: string,
+  endTime?: string | null
+) {
+  const formattedDate = new Intl.DateTimeFormat("id-ID", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone: "Asia/Jakarta",
+  }).format(new Date(`${date}T00:00:00`));
+
+  return `${formattedDate} - ${formatBookingTimeWindow(time, endTime)}`;
 }
 
 function statusBadgeClass(status: string) {
@@ -432,7 +450,11 @@ export default function AdminFinancePage() {
                           <td className="py-4 font-medium">{item.orderId}</td>
                           <td className="py-4">{item.customerName}</td>
                           <td className="py-4">
-                            {item.bookingDate} · {item.bookingTime}
+                            {formatBookingSchedule(
+                              item.bookingDate,
+                              item.bookingTime,
+                              item.bookingEndTime
+                            )}
                           </td>
                           <td className="py-4">
                             <div>{formatCurrency(item.netPartnerAmount)}</div>
@@ -573,3 +595,4 @@ function Field({
     </label>
   );
 }
+

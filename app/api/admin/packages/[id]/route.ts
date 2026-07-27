@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { requireSessionWithRole } from "@/lib/auth/access";
 import {
+  PartnerCategoryValidationError,
   deletePartnerPackage,
   updatePartnerPackage,
 } from "@/lib/partner-cms";
@@ -20,6 +21,7 @@ export async function PATCH(
   const { id } = await context.params;
   const packageId = Number(id);
   const body = (await request.json()) as {
+    categoryId?: number;
     name?: string;
     duration?: string;
     price?: number;
@@ -33,24 +35,43 @@ export async function PATCH(
     );
   }
 
+  const categoryId = Number(body.categoryId);
   const name = body.name?.trim() ?? "";
   const duration = body.duration?.trim() ?? "";
   const price = Number(body.price ?? 0);
   const description = body.description?.trim() ?? "";
 
-  if (!name || !duration || price <= 0) {
+  if (
+    !Number.isInteger(categoryId) ||
+    categoryId <= 0 ||
+    !name ||
+    !duration ||
+    price <= 0
+  ) {
     return NextResponse.json(
-      { message: "Nama, durasi, dan harga paket wajib diisi." },
+      { message: "Kategori, nama, durasi, dan harga paket wajib diisi." },
       { status: 400 }
     );
   }
 
-  await updatePartnerPackage(authorized.userId, packageId, {
-    name,
-    duration,
-    price,
-    description,
-  });
+  try {
+    await updatePartnerPackage(authorized.userId, packageId, {
+      categoryId,
+      name,
+      duration,
+      price,
+      description,
+    });
+  } catch (error) {
+    if (error instanceof PartnerCategoryValidationError) {
+      return NextResponse.json(
+        { message: error.message },
+        { status: error.status }
+      );
+    }
+
+    throw error;
+  }
 
   return NextResponse.json({ message: "Paket berhasil diperbarui." });
 }

@@ -9,31 +9,53 @@ type FindFgPartner = {
   slug: string;
   brandName: string;
   category: string;
+  categories: Array<{
+    id: number;
+    name: string;
+    slug: string;
+  }>;
   imageUrl: string;
 };
 
 export default function FindFg({
   photographers,
+  initialCategorySlug,
 }: {
   photographers: FindFgPartner[];
+  initialCategorySlug?: string | null;
 }) {
   const categories = useMemo(() => {
-    const uniqueCategories = Array.from(
-      new Set(
-        photographers
-          .map((item) => item.category.trim())
-          .filter(Boolean)
-      )
-    );
+    const entries = new Map<string, string>();
 
-    return ["All", ...uniqueCategories];
+    for (const photographer of photographers) {
+      for (const category of photographer.categories) {
+        if (category.slug && category.name && !entries.has(category.slug)) {
+          entries.set(category.slug, category.name);
+        }
+      }
+    }
+
+    return [
+      { slug: "all", name: "All" },
+      ...Array.from(entries.entries()).map(([slug, name]) => ({ slug, name })),
+    ];
   }, [photographers]);
-  const [activeCategory, setActiveCategory] = useState("All");
+  const [activeCategory, setActiveCategory] = useState(() => {
+    const normalized = initialCategorySlug?.trim().toLowerCase();
+
+    if (normalized && categories.some((item) => item.slug === normalized)) {
+      return normalized;
+    }
+
+    return "all";
+  });
 
   const filtered =
-    activeCategory === "All"
+    activeCategory === "all"
       ? photographers
-      : photographers.filter((item) => item.category === activeCategory);
+      : photographers.filter((item) =>
+          item.categories.some((category) => category.slug === activeCategory)
+        );
 
   return (
     <section
@@ -58,15 +80,15 @@ export default function FindFg({
   <div className="flex flex-wrap gap-4 text-[18px] text-gray-400 md:gap-8">
     {categories.map((category) => (
       <button
-        key={category}
-        onClick={() => setActiveCategory(category)}
+        key={category.slug}
+        onClick={() => setActiveCategory(category.slug)}
         className={`transition ${
-          activeCategory === category
+          activeCategory === category.slug
             ? "font-medium text-black"
             : "hover:text-black"
         }`}
       >
-        {category}
+        {category.name}
       </button>
     ))}
   </div>
@@ -82,7 +104,14 @@ export default function FindFg({
 </div>
       <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 md:grid-cols-4">
         {filtered.map((partner) => (
-          <Link key={partner.userId} href={`/findfg/${partner.slug}`}>
+          <Link
+            key={partner.userId}
+            href={
+              activeCategory !== "all"
+                ? `/findfg/${partner.slug}?category=${encodeURIComponent(activeCategory)}`
+                : `/findfg/${partner.slug}`
+            }
+          >
             <div className="relative h-[260px] w-full cursor-pointer overflow-hidden rounded-sm transition hover:scale-[1.02]">
               <Image
                 src={partner.imageUrl}

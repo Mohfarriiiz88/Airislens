@@ -8,6 +8,11 @@ import {
 } from "mysql2/promise";
 
 import {
+  calculateBookingEndTime,
+  DEFAULT_MANUAL_SCHEDULE_DURATION_MINUTES,
+  parsePackageDurationToMinutes,
+} from "@/lib/booking-time";
+import {
   getBookingLifecycleLabel,
   getBookingLifecycleStatus,
   type AdminBooking,
@@ -17,6 +22,8 @@ import {
   type UserBookingHistoryItem,
 } from "@/lib/bookings.shared";
 import { getDbPool } from "@/lib/db";
+import { ensurePartnerCmsSchema } from "@/lib/partner-cms";
+import { getServiceFeeRatePercent } from "@/lib/service-fee";
 export {
   getBookingLifecycleLabel,
   getBookingLifecycleStatus,
@@ -39,6 +46,7 @@ type BookingRow = RowDataPacket & {
   order_id: string;
   photographer_user_id: number;
   customer_user_id: number | null;
+  category_id: number | null;
   package_id: number | null;
   customer_name: string;
   customer_phone: string;
@@ -46,6 +54,7 @@ type BookingRow = RowDataPacket & {
   amount: number;
   booking_date: string;
   booking_time: string;
+  booking_end_time: string | null;
   location: string;
   event_address: string | null;
   event_latitude: number | null;
@@ -53,6 +62,8 @@ type BookingRow = RowDataPacket & {
   distance_km: number;
   transport_fee: number;
   package_price: number | null;
+  service_fee_rate: number;
+  service_fee: number;
   total_price: number | null;
   note: string;
   status: BookingStatusDb;
@@ -68,12 +79,13 @@ declare global {
   var __airislensBookingSchemaVersion: number | undefined;
 }
 
-const BOOKING_SCHEMA_VERSION = 4;
+const BOOKING_SCHEMA_VERSION = 8;
 
 export type CreateBookingInput = {
   orderId: string;
   photographerUserId: number;
   customerUserId?: number | null;
+  categoryId?: number | null;
   packageId?: number | null;
   customerName: string;
   customerPhone: string;
@@ -81,6 +93,7 @@ export type CreateBookingInput = {
   amount: number;
   bookingDate: string;
   bookingTime: string;
+  bookingEndTime?: string | null;
   location?: string;
   eventAddress?: string;
   eventLatitude?: number | null;
@@ -88,6 +101,8 @@ export type CreateBookingInput = {
   distanceKm?: number;
   transportFee?: number;
   packagePrice?: number | null;
+  serviceFeeRate?: number;
+  serviceFee?: number;
   totalPrice?: number | null;
   note?: string;
   status?: AdminBookingStatus;
@@ -95,7 +110,7 @@ export type CreateBookingInput = {
 
 export class BookingSlotUnavailableError extends Error {
   constructor() {
-    super("Jadwal pada jam tersebut sudah tidak tersedia.");
+    super("Jadwal tidak tersedia untuk durasi paket yang dipilih.");
     this.name = "BookingSlotUnavailableError";
   }
 }
@@ -132,6 +147,20 @@ function getExecutor(connection?: PoolConnection) {
   return (connection ?? getDbPool()) as DbExecutor;
 }
 
+function getFallbackBookingEndTime(
+  bookingTime: string,
+  bookingEndTime?: string | null
+) {
+  if (bookingEndTime) {
+    return bookingEndTime;
+  }
+
+  return calculateBookingEndTime(
+    bookingTime,
+    DEFAULT_MANUAL_SCHEDULE_DURATION_MINUTES
+  );
+}
+
 function normalizeTimestamp(value: Date | string | null | undefined) {
   if (!value) {
     return null;
@@ -158,6 +187,7 @@ function normalizeBooking(row: BookingRow): AdminBooking {
     orderId: row.order_id,
     photographerUserId: row.photographer_user_id,
     customerUserId: row.customer_user_id,
+    categoryId: row.category_id === null ? null : Number(row.category_id),
     packageId: row.package_id,
     customerName: row.customer_name,
     customerPhone: row.customer_phone,
@@ -165,6 +195,7 @@ function normalizeBooking(row: BookingRow): AdminBooking {
     amount: Number(row.amount),
     bookingDate: row.booking_date,
     bookingTime: row.booking_time,
+    bookingEndTime: row.booking_end_time,
     location: row.location,
     eventAddress: row.event_address,
     eventLatitude:
@@ -175,6 +206,8 @@ function normalizeBooking(row: BookingRow): AdminBooking {
     transportFee: Number(row.transport_fee ?? 0),
     packagePrice:
       row.package_price === null ? null : Number(row.package_price),
+    serviceFeeRate: Number(row.service_fee_rate ?? getServiceFeeRatePercent()),
+    serviceFee: Number(row.service_fee ?? 0),
     totalPrice: row.total_price === null ? null : Number(row.total_price),
     note: row.note,
     status: mapStatusFromDb(row.status),
@@ -238,7 +271,8 @@ async function countActiveBookingsForUpdate(
   connection: PoolConnection,
   photographerUserId: number,
   bookingDate: string,
-  bookingTime: string
+  bookingTime: string,
+  bookingEndTime: string
 ) {
   const [rows] = await connection.execute<
     (RowDataPacket & { id: number })[]
@@ -248,11 +282,15 @@ async function countActiveBookingsForUpdate(
       FROM bookings
       WHERE photographer_user_id = ?
         AND booking_date = ?
-        AND booking_time = ?
+        AND TIME(booking_time) < TIME(?)
+        AND COALESCE(
+          booking_end_time,
+          ADDTIME(TIME(booking_time), '01:00:00')
+        ) > TIME(?)
         AND status <> 'cancelled'
       FOR UPDATE
     `,
-    [photographerUserId, bookingDate, bookingTime]
+    [photographerUserId, bookingDate, bookingEndTime, bookingTime]
   );
 
   return rows.length;
@@ -267,6 +305,7 @@ async function ensureBookingSchemaInternal() {
       order_id VARCHAR(64) NOT NULL,
       photographer_user_id BIGINT UNSIGNED NOT NULL,
       customer_user_id BIGINT UNSIGNED NULL,
+      category_id BIGINT UNSIGNED NULL,
       package_id BIGINT UNSIGNED NULL,
       customer_name VARCHAR(191) NOT NULL,
       customer_phone VARCHAR(30) NOT NULL,
@@ -274,6 +313,7 @@ async function ensureBookingSchemaInternal() {
       amount BIGINT UNSIGNED NOT NULL,
       booking_date DATE NOT NULL,
       booking_time VARCHAR(10) NOT NULL,
+      booking_end_time TIME NULL,
       location TEXT NOT NULL,
       event_address TEXT NULL,
       event_latitude DECIMAL(10,8) NULL,
@@ -281,6 +321,8 @@ async function ensureBookingSchemaInternal() {
       distance_km DECIMAL(8,2) NOT NULL DEFAULT 0,
       transport_fee BIGINT UNSIGNED NOT NULL DEFAULT 0,
       package_price BIGINT UNSIGNED NULL,
+      service_fee_rate DECIMAL(5,2) NOT NULL DEFAULT 3.00,
+      service_fee INT UNSIGNED NOT NULL DEFAULT 0,
       total_price BIGINT UNSIGNED NULL,
       note TEXT NOT NULL,
       status ENUM('pending', 'confirmed', 'completed', 'cancelled') NOT NULL DEFAULT 'pending',
@@ -290,12 +332,21 @@ async function ensureBookingSchemaInternal() {
       UNIQUE KEY bookings_order_id_unique (order_id),
       KEY bookings_photographer_user_id_idx (photographer_user_id),
       KEY bookings_customer_user_id_idx (customer_user_id),
+      KEY bookings_category_id_idx (category_id),
       KEY bookings_booking_date_idx (booking_date),
       KEY bookings_status_idx (status)
     )
   `);
 
   const bookingColumns = [
+    {
+      name: "category_id",
+      definition: "BIGINT UNSIGNED NULL AFTER customer_user_id",
+    },
+    {
+      name: "booking_end_time",
+      definition: "TIME NULL AFTER booking_time",
+    },
     {
       name: "event_address",
       definition: "TEXT NULL AFTER location",
@@ -321,8 +372,16 @@ async function ensureBookingSchemaInternal() {
       definition: "BIGINT UNSIGNED NULL AFTER transport_fee",
     },
     {
+      name: "service_fee_rate",
+      definition: "DECIMAL(5,2) NOT NULL DEFAULT 3.00 AFTER package_price",
+    },
+    {
+      name: "service_fee",
+      definition: "INT UNSIGNED NOT NULL DEFAULT 0 AFTER service_fee_rate",
+    },
+    {
       name: "total_price",
-      definition: "BIGINT UNSIGNED NULL AFTER package_price",
+      definition: "BIGINT UNSIGNED NULL AFTER service_fee",
     },
     {
       name: "service_completed_at",
@@ -402,6 +461,86 @@ async function ensureBookingSchemaInternal() {
       ADD KEY bookings_customer_user_id_idx (customer_user_id)
     `);
   }
+
+  const [categoryIdIndexRows] = await pool.execute<
+    (RowDataPacket & { INDEX_NAME: string })[]
+  >(
+    `
+      SELECT INDEX_NAME
+      FROM information_schema.STATISTICS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'bookings'
+        AND INDEX_NAME = 'bookings_category_id_idx'
+      LIMIT 1
+    `
+  );
+
+  if (categoryIdIndexRows.length === 0) {
+    await pool.execute(`
+      ALTER TABLE bookings
+      ADD KEY bookings_category_id_idx (category_id)
+    `);
+  }
+
+  await ensurePartnerCmsSchema();
+  await pool.execute(`
+    UPDATE bookings b
+    INNER JOIN partner_packages pkg
+      ON pkg.id = b.package_id
+    SET b.category_id = pkg.category_id
+    WHERE b.category_id IS NULL
+      AND b.package_id IS NOT NULL
+      AND pkg.category_id IS NOT NULL
+  `);
+
+  const [bookingEndTimeRows] = await pool.execute<
+    (RowDataPacket & {
+      id: number;
+      booking_time: string;
+      duration: string | null;
+    })[]
+  >(
+    `
+      SELECT
+        b.id,
+        b.booking_time,
+        pkg.duration
+      FROM bookings b
+      LEFT JOIN partner_packages pkg
+        ON pkg.id = b.package_id
+      WHERE b.booking_end_time IS NULL
+    `
+  );
+
+  for (const row of bookingEndTimeRows) {
+    let durationMinutes = DEFAULT_MANUAL_SCHEDULE_DURATION_MINUTES;
+
+    if (row.duration) {
+      try {
+        durationMinutes = parsePackageDurationToMinutes(row.duration);
+      } catch {
+        durationMinutes = DEFAULT_MANUAL_SCHEDULE_DURATION_MINUTES;
+      }
+    }
+
+    const bookingEndTime = calculateBookingEndTime(
+      row.booking_time,
+      durationMinutes,
+      {
+        allowOverflowHours: true,
+      }
+    );
+
+    await pool.execute(
+      `
+        UPDATE bookings
+        SET booking_end_time = ?
+        WHERE id = ?
+          AND booking_end_time IS NULL
+      `,
+      [bookingEndTime, row.id]
+    );
+  }
 }
 
 export async function ensureBookingSchema() {
@@ -427,11 +566,16 @@ async function insertBooking(
   input: CreateBookingInput
 ) {
   const teamQuota = await lockPartnerQuota(connection, input.photographerUserId);
+  const bookingEndTime = getFallbackBookingEndTime(
+    input.bookingTime.trim(),
+    input.bookingEndTime
+  );
   const activeBookingCount = await countActiveBookingsForUpdate(
     connection,
     input.photographerUserId,
     input.bookingDate,
-    input.bookingTime.trim()
+    input.bookingTime.trim(),
+    bookingEndTime
   );
 
   if (activeBookingCount >= teamQuota) {
@@ -444,6 +588,7 @@ async function insertBooking(
         order_id,
         photographer_user_id,
         customer_user_id,
+        category_id,
         package_id,
         customer_name,
         customer_phone,
@@ -451,6 +596,7 @@ async function insertBooking(
         amount,
         booking_date,
         booking_time,
+        booking_end_time,
         location,
         event_address,
         event_latitude,
@@ -458,16 +604,19 @@ async function insertBooking(
         distance_km,
         transport_fee,
         package_price,
+        service_fee_rate,
+        service_fee,
         total_price,
         note,
         status
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     [
       input.orderId,
       input.photographerUserId,
       input.customerUserId ?? null,
+      input.categoryId ?? null,
       input.packageId ?? null,
       input.customerName.trim(),
       input.customerPhone.trim(),
@@ -475,6 +624,7 @@ async function insertBooking(
       input.amount,
       input.bookingDate,
       input.bookingTime.trim(),
+      bookingEndTime,
       input.location?.trim() ?? input.eventAddress?.trim() ?? "",
       input.eventAddress?.trim() ?? null,
       input.eventLatitude ?? null,
@@ -482,6 +632,8 @@ async function insertBooking(
       input.distanceKm ?? 0,
       input.transportFee ?? 0,
       input.packagePrice ?? null,
+      input.serviceFeeRate ?? getServiceFeeRatePercent(),
+      input.serviceFee ?? 0,
       input.totalPrice ?? input.amount,
       input.note?.trim() ?? "",
       mapStatusToDb(input.status ?? "Pending"),
@@ -565,6 +717,7 @@ export async function getAdminBookingById(
         order_id,
         photographer_user_id,
         customer_user_id,
+        category_id,
         package_id,
         customer_name,
         customer_phone,
@@ -572,6 +725,7 @@ export async function getAdminBookingById(
         amount,
         DATE_FORMAT(booking_date, '%Y-%m-%d') AS booking_date,
         booking_time,
+        TIME_FORMAT(booking_end_time, '%H:%i') AS booking_end_time,
         location,
         event_address,
         event_latitude,
@@ -579,6 +733,8 @@ export async function getAdminBookingById(
         distance_km,
         transport_fee,
         package_price,
+        service_fee_rate,
+        service_fee,
         total_price,
         note,
         status,
@@ -640,6 +796,7 @@ export async function getUserBookingById(
         order_id,
         photographer_user_id,
         customer_user_id,
+        category_id,
         package_id,
         customer_name,
         customer_phone,
@@ -647,6 +804,7 @@ export async function getUserBookingById(
         amount,
         DATE_FORMAT(booking_date, '%Y-%m-%d') AS booking_date,
         booking_time,
+        TIME_FORMAT(booking_end_time, '%H:%i') AS booking_end_time,
         location,
         event_address,
         event_latitude,
@@ -654,6 +812,8 @@ export async function getUserBookingById(
         distance_km,
         transport_fee,
         package_price,
+        service_fee_rate,
+        service_fee,
         total_price,
         note,
         status,
@@ -744,6 +904,7 @@ export async function getBookingByOrderId(
         order_id,
         photographer_user_id,
         customer_user_id,
+        category_id,
         package_id,
         customer_name,
         customer_phone,
@@ -751,6 +912,7 @@ export async function getBookingByOrderId(
         amount,
         DATE_FORMAT(booking_date, '%Y-%m-%d') AS booking_date,
         booking_time,
+        TIME_FORMAT(booking_end_time, '%H:%i') AS booking_end_time,
         location,
         event_address,
         event_latitude,
@@ -758,6 +920,8 @@ export async function getBookingByOrderId(
         distance_km,
         transport_fee,
         package_price,
+        service_fee_rate,
+        service_fee,
         total_price,
         note,
         status,
@@ -792,6 +956,7 @@ export async function listAdminBookings(userId: number, limit?: number) {
         order_id,
         photographer_user_id,
         customer_user_id,
+        category_id,
         package_id,
         customer_name,
         customer_phone,
@@ -799,6 +964,7 @@ export async function listAdminBookings(userId: number, limit?: number) {
         amount,
         DATE_FORMAT(booking_date, '%Y-%m-%d') AS booking_date,
         booking_time,
+        TIME_FORMAT(booking_end_time, '%H:%i') AS booking_end_time,
         location,
         event_address,
         event_latitude,
@@ -806,6 +972,8 @@ export async function listAdminBookings(userId: number, limit?: number) {
         distance_km,
         transport_fee,
         package_price,
+        service_fee_rate,
+        service_fee,
         total_price,
         note,
         status,
@@ -851,7 +1019,15 @@ export async function getBookingDashboardSnapshot(
         COUNT(*) AS total_bookings,
         SUM(CASE WHEN booking_date = ? THEN 1 ELSE 0 END) AS today_bookings,
         SUM(CASE WHEN DATE_FORMAT(booking_date, '%Y-%m') = ? THEN 1 ELSE 0 END) AS month_bookings,
-        SUM(CASE WHEN status <> 'cancelled' THEN amount ELSE 0 END) AS total_revenue,
+        SUM(
+          CASE
+            WHEN status <> 'cancelled' THEN GREATEST(
+              COALESCE(package_price, 0) + COALESCE(transport_fee, 0),
+              GREATEST(COALESCE(total_price, amount) - COALESCE(service_fee, 0), 0)
+            )
+            ELSE 0
+          END
+        ) AS total_revenue,
         SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS awaiting_payment_count,
         SUM(CASE WHEN status = 'confirmed' THEN 1 ELSE 0 END) AS scheduled_count,
         SUM(CASE WHEN status = 'completed' AND customer_confirmed_at IS NULL THEN 1 ELSE 0 END) AS awaiting_customer_confirmation_count,
@@ -870,6 +1046,7 @@ export async function getBookingDashboardSnapshot(
         order_id,
         photographer_user_id,
         customer_user_id,
+        category_id,
         package_id,
         customer_name,
         customer_phone,
@@ -877,6 +1054,7 @@ export async function getBookingDashboardSnapshot(
         amount,
         DATE_FORMAT(booking_date, '%Y-%m-%d') AS booking_date,
         booking_time,
+        TIME_FORMAT(booking_end_time, '%H:%i') AS booking_end_time,
         location,
         event_address,
         event_latitude,
@@ -884,6 +1062,8 @@ export async function getBookingDashboardSnapshot(
         distance_km,
         transport_fee,
         package_price,
+        service_fee_rate,
+        service_fee,
         total_price,
         note,
         status,
@@ -906,6 +1086,7 @@ export async function getBookingDashboardSnapshot(
         order_id,
         photographer_user_id,
         customer_user_id,
+        category_id,
         package_id,
         customer_name,
         customer_phone,
@@ -913,6 +1094,7 @@ export async function getBookingDashboardSnapshot(
         amount,
         DATE_FORMAT(booking_date, '%Y-%m-%d') AS booking_date,
         booking_time,
+        TIME_FORMAT(booking_end_time, '%H:%i') AS booking_end_time,
         location,
         event_address,
         event_latitude,
@@ -920,6 +1102,8 @@ export async function getBookingDashboardSnapshot(
         distance_km,
         transport_fee,
         package_price,
+        service_fee_rate,
+        service_fee,
         total_price,
         note,
         status,
@@ -970,6 +1154,7 @@ export async function listUserBookingHistory(userId: number) {
       b.order_id,
       b.photographer_user_id,
       b.customer_user_id,
+      b.category_id,
       b.package_id,
       b.customer_name,
       b.customer_phone,
@@ -977,6 +1162,7 @@ export async function listUserBookingHistory(userId: number) {
       b.amount,
       DATE_FORMAT(b.booking_date, '%Y-%m-%d') AS booking_date,
       b.booking_time,
+      TIME_FORMAT(b.booking_end_time, '%H:%i') AS booking_end_time,
       b.location,
       b.event_address,
       b.event_latitude,
@@ -984,6 +1170,8 @@ export async function listUserBookingHistory(userId: number) {
       b.distance_km,
       b.transport_fee,
       b.package_price,
+      b.service_fee_rate,
+      b.service_fee,
       b.total_price,
       b.note,
       b.status,
@@ -1069,8 +1257,10 @@ export async function listUserBookingHistory(userId: number) {
       id: row.id,
       orderId: row.order_id,
       photographerName: row.photographer_name || "Photographer",
+      categoryId: row.category_id === null ? null : Number(row.category_id),
       bookingDate: row.booking_date,
       bookingTime: row.booking_time,
+      bookingEndTime: row.booking_end_time,
       amount: Number(row.amount),
       location: row.location,
       eventAddress: row.event_address,
@@ -1078,6 +1268,8 @@ export async function listUserBookingHistory(userId: number) {
       transportFee: Number(row.transport_fee ?? 0),
       packagePrice:
         row.package_price === null ? null : Number(row.package_price),
+      serviceFeeRate: Number(row.service_fee_rate ?? getServiceFeeRatePercent()),
+      serviceFee: Number(row.service_fee ?? 0),
       totalPrice: row.total_price === null ? null : Number(row.total_price),
       status,
       lifecycleStatus,
@@ -1111,6 +1303,7 @@ export async function listAdminBookingsByDate(userId: number, date: string) {
         order_id,
         photographer_user_id,
         customer_user_id,
+        category_id,
         package_id,
         customer_name,
         customer_phone,
@@ -1118,6 +1311,7 @@ export async function listAdminBookingsByDate(userId: number, date: string) {
         amount,
         DATE_FORMAT(booking_date, '%Y-%m-%d') AS booking_date,
         booking_time,
+        TIME_FORMAT(booking_end_time, '%H:%i') AS booking_end_time,
         location,
         event_address,
         event_latitude,
@@ -1125,6 +1319,8 @@ export async function listAdminBookingsByDate(userId: number, date: string) {
         distance_km,
         transport_fee,
         package_price,
+        service_fee_rate,
+        service_fee,
         total_price,
         note,
         status,
@@ -1154,6 +1350,7 @@ export async function listAdminBookingsByDate(userId: number, date: string) {
       packageName: row.package_name,
       bookingDate: row.booking_date,
       bookingTime: row.booking_time,
+      bookingEndTime: row.booking_end_time,
       location: row.location,
       status,
       lifecycleStatus,

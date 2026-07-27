@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { formatBookingTimeWindow } from "@/lib/booking-time";
+
 type BookingStatus = "Pending" | "Confirmed" | "Completed" | "Cancelled";
 
 type AdminBookingSummary = {
@@ -11,6 +13,7 @@ type AdminBookingSummary = {
   packageName: string;
   bookingDate: string;
   bookingTime: string;
+  bookingEndTime: string | null;
   location: string;
   status: BookingStatus;
 };
@@ -20,6 +23,7 @@ type BookingPopupPayload = {
   packageName?: string;
   date?: string;
   time?: string;
+  endTime?: string;
   location?: string;
 };
 
@@ -43,6 +47,7 @@ function buildPopupFromPayload(payload: BookingPopupPayload) {
     packageName: payload.packageName || "Paket belum diketahui",
     bookingDate: payload.date || "",
     bookingTime: payload.time || "",
+    bookingEndTime: payload.endTime || null,
     location: payload.location || "",
   };
 }
@@ -54,6 +59,7 @@ function buildPopupFromBooking(booking: AdminBookingSummary) {
     packageName: booking.packageName,
     bookingDate: booking.bookingDate,
     bookingTime: booking.bookingTime,
+    bookingEndTime: booking.bookingEndTime,
     location: booking.location,
   };
 }
@@ -172,7 +178,10 @@ export default function AdminBookingPopup() {
           </p>
           <p className="mt-2 text-xs text-black/55">
             {popup.bookingDate
-              ? `${formatDate(popup.bookingDate)} - ${popup.bookingTime}`
+              ? `${formatDate(popup.bookingDate)} - ${formatBookingTimeWindow(
+                  popup.bookingTime,
+                  popup.bookingEndTime
+                )}`
               : "Jadwal booking baru masuk"}
           </p>
           <p className="mt-1 text-xs text-black/50">

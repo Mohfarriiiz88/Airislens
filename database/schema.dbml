@@ -100,12 +100,16 @@ Table users {
   phone varchar(20) [null]
   password_hash text [not null]
   role user_role [not null, default: 'user']
+  email_verified_at datetime [null]
+  verification_token varchar(255) [null, note: "Stores hashed email verification token"]
+  verification_expires_at datetime [null]
   superadmin_slot tinyint [note: "Generated column in MySQL: 1 when role = 'superadmin', else NULL"]
   created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
   updated_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
 
   Indexes {
     email [unique, name: "users_email_unique"]
+    verification_token [unique, name: "users_verification_token_unique"]
     superadmin_slot [unique, name: "users_superadmin_singleton"]
   }
 }
@@ -152,9 +156,24 @@ Table partner_gallery_items {
   }
 }
 
+Table partner_categories {
+  id bigint [pk, increment, not null]
+  user_id bigint [not null]
+  name varchar(50) [not null]
+  slug varchar(80) [not null]
+  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    (user_id, slug) [unique, name: "partner_categories_user_slug_unique"]
+    user_id [name: "partner_categories_user_id_idx"]
+  }
+}
+
 Table partner_packages {
   id bigint [pk, increment, not null]
   user_id bigint [not null]
+  category_id bigint [null]
   name varchar(100) [not null]
   duration varchar(100) [not null]
   price bigint [not null]
@@ -164,6 +183,7 @@ Table partner_packages {
 
   Indexes {
     user_id [name: "partner_packages_user_id_idx"]
+    category_id [name: "partner_packages_category_id_idx"]
   }
 }
 
@@ -208,6 +228,7 @@ Table bookings {
   order_id varchar(64) [not null]
   photographer_user_id bigint [not null]
   customer_user_id bigint [null]
+  category_id bigint [null, note: "Snapshot category_id saat booking dibuat"]
   package_id bigint [null]
   customer_name varchar(191) [not null]
   customer_phone varchar(30) [not null]
@@ -215,6 +236,7 @@ Table bookings {
   amount bigint [not null]
   booking_date date [not null]
   booking_time varchar(10) [not null]
+  booking_end_time time [null, note: "Jam selesai booking hasil snapshot durasi paket"]
   location text [not null]
   event_address text [null]
   event_latitude decimal(10,8) [null]
@@ -222,6 +244,8 @@ Table bookings {
   distance_km decimal(8,2) [not null, default: 0]
   transport_fee bigint [not null, default: 0]
   package_price bigint [null]
+  service_fee_rate decimal(5,2) [not null, default: 3.00]
+  service_fee int [not null, default: 0]
   total_price bigint [null]
   note text [not null]
   status booking_status [not null, default: 'pending_payment']
@@ -236,6 +260,7 @@ Table bookings {
     order_id [unique, name: "bookings_order_id_unique"]
     photographer_user_id [name: "bookings_photographer_user_id_idx"]
     customer_user_id [name: "bookings_customer_user_id_idx"]
+    category_id [name: "bookings_category_id_idx"]
     booking_date [name: "bookings_booking_date_idx"]
     status [name: "bookings_status_idx"]
   }
@@ -405,7 +430,9 @@ Table admin_notification_tokens {
 
 Ref: partner_profiles.user_id > users.id
 Ref: partner_gallery_items.user_id > users.id
+Ref: partner_categories.user_id > users.id
 Ref: partner_packages.user_id > users.id
+Ref: partner_packages.category_id > partner_categories.id
 Ref: partner_schedules.user_id > users.id
 Ref: partner_applications.submitted_by_user_id > users.id
 Ref: bookings.photographer_user_id > users.id

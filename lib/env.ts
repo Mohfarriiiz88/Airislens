@@ -8,18 +8,31 @@ function getRequiredEnv(name: string) {
   return value;
 }
 
+function getRequiredTrimmedEnv(name: string) {
+  return getRequiredEnv(name).trim();
+}
+
+const EMAIL_VERIFICATION_ENV_NAMES = [
+  "NEXT_PUBLIC_APP_URL",
+  "SMTP_HOST",
+  "SMTP_PORT",
+  "SMTP_USER",
+  "SMTP_PASS",
+  "SMTP_FROM",
+] as const;
+
 export function getDatabaseConfig() {
   return {
-    host: getRequiredEnv("DB_HOST"),
+    host: getRequiredTrimmedEnv("DB_HOST"),
     port: Number(process.env.DB_PORT ?? "3306"),
-    user: getRequiredEnv("DB_USER"),
+    user: getRequiredTrimmedEnv("DB_USER"),
     password: process.env.DB_PASSWORD ?? "",
-    database: getRequiredEnv("DB_NAME"),
+    database: getRequiredTrimmedEnv("DB_NAME"),
   };
 }
 
 export function getJwtSecret() {
-  return getRequiredEnv("JWT_SECRET");
+  return getRequiredTrimmedEnv("JWT_SECRET");
 }
 
 /**
@@ -36,18 +49,54 @@ export function getMidtransEnvFallback() {
 }
 
 export function getSettingsEncryptionKey() {
-  return getRequiredEnv("SETTINGS_ENCRYPTION_KEY").trim();
+  return getRequiredTrimmedEnv("SETTINGS_ENCRYPTION_KEY");
 }
 
 export function getFonnteConfig() {
   return {
-    token: getRequiredEnv("FONNTE_TOKEN").trim(),
-    adminPhone: getRequiredEnv("ADMIN_WA").trim(),
+    token: getRequiredTrimmedEnv("FONNTE_TOKEN"),
+    adminPhone: getRequiredTrimmedEnv("ADMIN_WA"),
   };
 }
 
 export function getOptionalSuperadminEmail() {
   return process.env.SUPERADMIN_EMAIL?.trim().toLowerCase() || null;
+}
+
+export function getAppBaseUrl() {
+  const value = getRequiredTrimmedEnv("NEXT_PUBLIC_APP_URL");
+
+  return value.replace(/\/+$/, "");
+}
+
+export function getSmtpConfig() {
+  return {
+    host: getRequiredTrimmedEnv("SMTP_HOST"),
+    port: Number(getRequiredTrimmedEnv("SMTP_PORT")),
+    user: getRequiredTrimmedEnv("SMTP_USER"),
+    pass: getRequiredTrimmedEnv("SMTP_PASS"),
+    from: getRequiredTrimmedEnv("SMTP_FROM"),
+  };
+}
+
+export function getMissingEmailVerificationEnvVars() {
+  return EMAIL_VERIFICATION_ENV_NAMES.filter(
+    (name) => !process.env[name]?.trim()
+  );
+}
+
+export function getOptionalServiceFeeRate() {
+  const value = process.env.SERVICE_FEE_RATE?.trim();
+
+  if (!value) {
+    return null;
+  }
+
+  const numericValue = Number(value);
+
+  return Number.isFinite(numericValue) && numericValue >= 0
+    ? numericValue
+    : null;
 }
 
 function getOptionalEnv(name: string) {

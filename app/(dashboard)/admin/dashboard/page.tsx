@@ -43,7 +43,7 @@ export default async function DashboardPage() {
         />
         <StatCard title="Bulan Ini" value={String(snapshot.monthBookings)} />
         <StatCard
-          title="Pendapatan"
+          title="Pendapatan Fotografer"
           value={formatCurrency(snapshot.totalRevenue)}
         />
       </div>

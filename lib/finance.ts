@@ -4,6 +4,7 @@ import { type RowDataPacket } from "mysql2/promise";
 
 import { getDbPool } from "@/lib/db";
 import { ensureDisputeSchema, type DisputeStatus } from "@/lib/disputes";
+import { ensurePaymentSchema } from "@/lib/payments";
 import {
   ensureSettlementSchema,
   type EscrowStatus,
@@ -30,6 +31,7 @@ type PartnerSettlementRow = RowDataPacket & {
   customer_name: string;
   booking_date: string;
   booking_time: string;
+  booking_end_time: string | null;
   gross_amount: number;
   commission_amount: number;
   net_partner_amount: number;
@@ -64,6 +66,7 @@ type WalletSummaryRow = RowDataPacket & {
 type EscrowSummaryRow = RowDataPacket & {
   held_amount: number | null;
   ready_amount: number | null;
+  platform_service_fee_revenue: number | null;
 };
 
 type WithdrawalReviewRow = RowDataPacket & {
@@ -101,6 +104,7 @@ type RefundRequestReviewRow = RowDataPacket & {
   customer_email: string | null;
   booking_date: string;
   booking_time: string;
+  booking_end_time: string | null;
   photographer_name: string;
   gross_amount: number;
 };
@@ -112,6 +116,7 @@ export type PartnerSettlementItem = {
   customerName: string;
   bookingDate: string;
   bookingTime: string;
+  bookingEndTime: string | null;
   grossAmount: number;
   commissionAmount: number;
   netPartnerAmount: number;
@@ -167,6 +172,7 @@ export type SuperadminRefundRequestItem = {
   photographerName: string;
   bookingDate: string;
   bookingTime: string;
+  bookingEndTime: string | null;
   grossAmount: number;
   reason: string;
   status: DisputeStatus;
@@ -186,6 +192,7 @@ export type SuperadminFinanceOverview = {
     totalPartnerPendingWithdrawalBalance: number;
     escrowHeldAmount: number;
     escrowReadyAmount: number;
+    platformServiceFeeRevenue: number;
   };
   withdrawals: SuperadminWithdrawalReviewItem[];
   refundRequests: SuperadminRefundRequestItem[];
@@ -209,6 +216,7 @@ function normalizePartnerSettlementRow(
     customerName: row.customer_name,
     bookingDate: row.booking_date,
     bookingTime: row.booking_time,
+    bookingEndTime: row.booking_end_time,
     grossAmount: Number(row.gross_amount ?? 0),
     commissionAmount: Number(row.commission_amount ?? 0),
     netPartnerAmount: Number(row.net_partner_amount ?? 0),
@@ -256,6 +264,7 @@ function normalizeRefundRequestReviewRow(
     photographerName: row.photographer_name,
     bookingDate: row.booking_date,
     bookingTime: row.booking_time,
+    bookingEndTime: row.booking_end_time,
     grossAmount: Number(row.gross_amount ?? 0),
     reason: row.reason,
     status: row.status,
@@ -283,6 +292,7 @@ export async function listPartnerSettlements(
         b.customer_name,
         DATE_FORMAT(b.booking_date, '%Y-%m-%d') AS booking_date,
         b.booking_time,
+        TIME_FORMAT(b.booking_end_time, '%H:%i') AS booking_end_time,
         bs.gross_amount,
         bs.commission_amount,
         bs.net_partner_amount,
@@ -436,6 +446,7 @@ export async function listRefundRequestReviewItems(limit = 50) {
         cu.email AS customer_email,
         DATE_FORMAT(b.booking_date, '%Y-%m-%d') AS booking_date,
         b.booking_time,
+        TIME_FORMAT(b.booking_end_time, '%H:%i') AS booking_end_time,
         COALESCE(NULLIF(pp.brand_name, ''), pu.name) AS photographer_name,
         COALESCE(b.total_price, b.amount) AS gross_amount
       FROM booking_disputes bd
@@ -466,6 +477,7 @@ export async function getSuperadminFinanceOverview(
     ensureWithdrawalSchema(),
     ensureSettlementSchema(),
     ensureDisputeSchema(),
+    ensurePaymentSchema(),
   ]);
 
   const pool = getDbPool();
@@ -498,7 +510,17 @@ export async function getSuperadminFinanceOverview(
       `
         SELECT
           SUM(CASE WHEN status = 'held' THEN net_partner_amount ELSE 0 END) AS held_amount,
-          SUM(CASE WHEN status = 'ready_to_release' THEN net_partner_amount ELSE 0 END) AS ready_amount
+          SUM(CASE WHEN status = 'ready_to_release' THEN net_partner_amount ELSE 0 END) AS ready_amount,
+          (
+            SELECT COALESCE(SUM(b.service_fee), 0)
+            FROM bookings b
+            WHERE EXISTS (
+              SELECT 1
+              FROM payments pay
+              WHERE pay.booking_id = b.id
+                AND pay.status = 'paid'
+            )
+          ) AS platform_service_fee_revenue
         FROM booking_settlements
       `
     ),
@@ -524,6 +546,9 @@ export async function getSuperadminFinanceOverview(
       ),
       escrowHeldAmount: Number(escrowSummary?.held_amount ?? 0),
       escrowReadyAmount: Number(escrowSummary?.ready_amount ?? 0),
+      platformServiceFeeRevenue: Number(
+        escrowSummary?.platform_service_fee_revenue ?? 0
+      ),
     },
     withdrawals,
     refundRequests,

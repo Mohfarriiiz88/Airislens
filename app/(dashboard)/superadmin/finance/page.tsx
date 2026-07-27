@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+import { formatBookingTimeWindow } from "@/lib/booking-time";
+
 type FinanceSummary = {
   pendingWithdrawalCount: number;
   processingWithdrawalCount: number;
@@ -11,6 +13,7 @@ type FinanceSummary = {
   totalPartnerPendingWithdrawalBalance: number;
   escrowHeldAmount: number;
   escrowReadyAmount: number;
+  platformServiceFeeRevenue: number;
 };
 
 type WithdrawalItem = {
@@ -41,6 +44,7 @@ type RefundRequestItem = {
   photographerName: string;
   bookingDate: string;
   bookingTime: string;
+  bookingEndTime: string | null;
   grossAmount: number;
   reason: string;
   status: string;
@@ -101,6 +105,21 @@ function formatDate(value: string | null) {
     dateStyle: "medium",
     timeStyle: "short",
   });
+}
+
+function formatBookingSchedule(
+  date: string,
+  time: string,
+  endTime?: string | null
+) {
+  const formattedDate = new Intl.DateTimeFormat("id-ID", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone: "Asia/Jakarta",
+  }).format(new Date(`${date}T00:00:00`));
+
+  return `${formattedDate} - ${formatBookingTimeWindow(time, endTime)}`;
 }
 
 function statusBadgeClass(status: string) {
@@ -311,12 +330,12 @@ export default function SuperadminFinancePage() {
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
             <MiniCard
-              label="Escrow Ditahan"
-              value={formatCurrency(overview.summary.escrowHeldAmount)}
+              label="Pendapatan Fee Platform"
+              value={formatCurrency(overview.summary.platformServiceFeeRevenue)}
             />
             <MiniCard
-              label="Escrow Siap Rilis"
-              value={formatCurrency(overview.summary.escrowReadyAmount)}
+              label="Escrow Ditahan"
+              value={formatCurrency(overview.summary.escrowHeldAmount)}
             />
             <MiniCard
               label="Saldo Ditahan Withdraw"
@@ -327,6 +346,10 @@ export default function SuperadminFinancePage() {
             <MiniCard
               label="Withdrawal Diproses"
               value={`${overview.summary.processingWithdrawalCount} request`}
+            />
+            <MiniCard
+              label="Escrow Siap Rilis"
+              value={formatCurrency(overview.summary.escrowReadyAmount)}
             />
           </div>
 
@@ -554,7 +577,12 @@ export default function SuperadminFinancePage() {
                           <td className="py-4">
                             <div className="font-medium text-black">{item.orderId}</div>
                             <div className="text-xs text-black/45">
-                              Booking #{item.bookingId} | {item.bookingDate} | {item.bookingTime}
+                              Booking #{item.bookingId} |{" "}
+                              {formatBookingSchedule(
+                                item.bookingDate,
+                                item.bookingTime,
+                                item.bookingEndTime
+                              )}
                             </div>
                           </td>
                           <td className="py-4">

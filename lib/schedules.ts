@@ -3,11 +3,25 @@ import "server-only";
 import { type ResultSetHeader, type RowDataPacket } from "mysql2/promise";
 
 import {
+  addMinutesToTime,
+  calculateBookingEndMinutes,
+  calculateBookingEndTime,
+  DEFAULT_MANUAL_SCHEDULE_DURATION_MINUTES,
+  getBookingTimeRangeLabel,
+  getBookingTimeRangeLabelFromMinutes,
+  isRangeWithinWorkingHours,
+  isTimeRangeOverlapping,
+  parsePackageDurationToMinutes,
+  parseTimeToMinutes,
+  formatMinutesAsTime,
+} from "@/lib/booking-time";
+import {
   ensureBookingSchema,
   listAdminBookingsByDate,
   type BookingCalendarItem,
 } from "@/lib/bookings";
 import { getDbPool } from "@/lib/db";
+import { ensurePartnerCmsSchema } from "@/lib/partner-cms";
 import { getPartnerBookingProfile } from "@/lib/partner-cms";
 import { BOOKING_TIME_SLOTS } from "@/lib/time-slots";
 
@@ -23,6 +37,33 @@ type PartnerScheduleRow = RowDataPacket & {
   updated_at: Date | string;
 };
 
+type PartnerPackageDurationRow = RowDataPacket & {
+  duration: string;
+};
+
+type ScheduleTimeRangeRow = RowDataPacket & {
+  id: number;
+  schedule_time: string;
+};
+
+type BookingTimeRangeRow = RowDataPacket & {
+  id: number;
+  booking_time: string;
+  booking_end_time: string | null;
+};
+
+type TimeRange = {
+  id: number;
+  startTime: string;
+  endTime: string;
+};
+
+type AvailabilityContext = {
+  teamQuota: number;
+  scheduleRanges: TimeRange[];
+  bookingRanges: TimeRange[];
+};
+
 declare global {
   var __airislensScheduleSchemaReady: Promise<void> | undefined;
 }
@@ -33,6 +74,7 @@ export type PartnerSchedule = {
   title: string;
   date: string;
   time: string;
+  endTime: string;
   location: string;
   note: string;
   createdAt: string;
@@ -55,7 +97,14 @@ export type AdminScheduleCalendar = {
 
 export type TimeSlotAvailabilitySummary = {
   time: string;
-  status: "available" | "limited" | "full" | "blocked";
+  endTime: string;
+  rangeLabel: string;
+  status:
+    | "available"
+    | "full"
+    | "closed"
+    | "conflict"
+    | "outside_working_hours";
   activeBookings: number;
   teamQuota: number;
   remainingQuota: number;
@@ -90,6 +139,10 @@ function normalizeSchedule(row: PartnerScheduleRow): PartnerSchedule {
     title: row.title,
     date: row.schedule_date,
     time: row.schedule_time,
+    endTime: addMinutesToTime(
+      row.schedule_time,
+      DEFAULT_MANUAL_SCHEDULE_DURATION_MINUTES
+    ),
     location: row.location,
     note: row.note,
     createdAt: normalizeDateTime(row.created_at),
@@ -142,63 +195,183 @@ export async function ensureScheduleSchema() {
   return global.__airislensScheduleSchemaReady;
 }
 
-async function hasManualScheduleConflict(
-  userId: number,
-  date: string,
-  time: string,
-  ignoreScheduleId?: number
-) {
-  const pool = getDbPool();
-  const ignoreClause =
-    typeof ignoreScheduleId === "number" && ignoreScheduleId > 0
-      ? "AND id <> ?"
-      : "";
-  const params: Array<string | number> =
-    typeof ignoreScheduleId === "number" && ignoreScheduleId > 0
-      ? [userId, date, time, ignoreScheduleId]
-      : [userId, date, time];
-
-  const [rows] = await pool.execute<
-    (RowDataPacket & { total: number })[]
-  >(
-    `
-      SELECT COUNT(*) AS total
-      FROM partner_schedules
-      WHERE user_id = ?
-        AND schedule_date = ?
-        AND schedule_time = ?
-        ${ignoreClause}
-      LIMIT 1
-    `,
-    params
-  );
-
-  return Number(rows[0]?.total ?? 0) > 0;
-}
-
-async function countActiveBookings(userId: number, date: string, time: string) {
-  const pool = getDbPool();
-  const [rows] = await pool.execute<
-    (RowDataPacket & { total: number })[]
-  >(
-    `
-      SELECT COUNT(*) AS total
-      FROM bookings
-      WHERE photographer_user_id = ?
-        AND booking_date = ?
-        AND booking_time = ?
-        AND status <> 'cancelled'
-      LIMIT 1
-    `,
-    [userId, date, time]
-  );
-
-  return Number(rows[0]?.total ?? 0);
-}
-
 async function getPartnerTeamQuota(userId: number) {
   const profile = await getPartnerBookingProfile(userId);
   return Math.max(1, Number(profile?.teamQuota ?? 1));
+}
+
+async function getPartnerPackageDurationMinutes(userId: number, packageId: number) {
+  await ensurePartnerCmsSchema();
+
+  const pool = getDbPool();
+  const [rows] = await pool.execute<PartnerPackageDurationRow[]>(
+    `
+      SELECT duration
+      FROM partner_packages
+      WHERE user_id = ?
+        AND id = ?
+      LIMIT 1
+    `,
+    [userId, packageId]
+  );
+
+  const duration = rows[0]?.duration?.trim() ?? "";
+
+  if (!duration) {
+    throw new Error("Durasi paket tidak ditemukan untuk fotografer ini.");
+  }
+
+  return parsePackageDurationToMinutes(duration);
+}
+
+function normalizeBookingRange(row: BookingTimeRangeRow): TimeRange {
+  return {
+    id: Number(row.id),
+    startTime: row.booking_time,
+    endTime:
+      row.booking_end_time ||
+      addMinutesToTime(
+        row.booking_time,
+        DEFAULT_MANUAL_SCHEDULE_DURATION_MINUTES
+      ),
+  };
+}
+
+function normalizeScheduleRange(row: ScheduleTimeRangeRow): TimeRange {
+  return {
+    id: Number(row.id),
+    startTime: row.schedule_time,
+    endTime: addMinutesToTime(
+      row.schedule_time,
+      DEFAULT_MANUAL_SCHEDULE_DURATION_MINUTES
+    ),
+  };
+}
+
+async function buildAvailabilityContext(userId: number, date: string) {
+  await ensureScheduleSchema();
+
+  const pool = getDbPool();
+  const [scheduleRows, bookingRows, teamQuota] = await Promise.all([
+    pool.execute<ScheduleTimeRangeRow[]>(
+      `
+        SELECT id, schedule_time
+        FROM partner_schedules
+        WHERE user_id = ?
+          AND schedule_date = ?
+      `,
+      [userId, date]
+    ),
+    pool.execute<BookingTimeRangeRow[]>(
+      `
+        SELECT
+          id,
+          booking_time,
+          TIME_FORMAT(booking_end_time, '%H:%i') AS booking_end_time
+        FROM bookings
+        WHERE photographer_user_id = ?
+          AND booking_date = ?
+          AND status <> 'cancelled'
+      `,
+      [userId, date]
+    ),
+    getPartnerTeamQuota(userId),
+  ]);
+
+  return {
+    teamQuota,
+    scheduleRanges: scheduleRows[0].map(normalizeScheduleRange),
+    bookingRanges: bookingRows[0].map(normalizeBookingRange),
+  } satisfies AvailabilityContext;
+}
+
+function evaluateTimeSlotAvailability(
+  time: string,
+  durationMinutes: number,
+  context: AvailabilityContext,
+  options?: {
+    ignoreScheduleId?: number;
+  }
+) {
+  const startMinutes = parseTimeToMinutes(time);
+  const endMinutes = calculateBookingEndMinutes(time, durationMinutes);
+  const endTime = formatMinutesAsTime(endMinutes, {
+    wrapWithinDay: true,
+  });
+  const rawEndTime = formatMinutesAsTime(endMinutes, {
+    allowOverflowHours: true,
+  });
+  const rangeLabel = getBookingTimeRangeLabelFromMinutes(
+    startMinutes,
+    endMinutes
+  );
+
+  if (!isRangeWithinWorkingHours(time, rawEndTime)) {
+    return {
+      time,
+      endTime,
+      rangeLabel,
+      status: "outside_working_hours",
+      activeBookings: 0,
+      teamQuota: context.teamQuota,
+      remainingQuota: 0,
+    } satisfies TimeSlotAvailabilitySummary;
+  }
+
+  const hasScheduleConflict = context.scheduleRanges.some(
+    (scheduleRange) =>
+      scheduleRange.id !== options?.ignoreScheduleId &&
+      isTimeRangeOverlapping(
+        scheduleRange.startTime,
+        scheduleRange.endTime,
+        time,
+        endTime
+      )
+  );
+
+  if (hasScheduleConflict) {
+    return {
+      time,
+      endTime,
+      rangeLabel,
+      status: "closed",
+      activeBookings: 0,
+      teamQuota: context.teamQuota,
+      remainingQuota: 0,
+    } satisfies TimeSlotAvailabilitySummary;
+  }
+
+  const activeBookings = context.bookingRanges.filter((bookingRange) =>
+    isTimeRangeOverlapping(
+      bookingRange.startTime,
+      bookingRange.endTime,
+      time,
+      endTime
+    )
+  ).length;
+  const remainingQuota = Math.max(0, context.teamQuota - activeBookings);
+
+  if (activeBookings >= context.teamQuota) {
+    return {
+      time,
+      endTime,
+      rangeLabel,
+      status: "full",
+      activeBookings,
+      teamQuota: context.teamQuota,
+      remainingQuota: 0,
+    } satisfies TimeSlotAvailabilitySummary;
+  }
+
+  return {
+    time,
+    endTime,
+    rangeLabel,
+    status: "available",
+    activeBookings,
+    teamQuota: context.teamQuota,
+    remainingQuota,
+  } satisfies TimeSlotAvailabilitySummary;
 }
 
 export async function isTimeSlotUnavailable(
@@ -207,17 +380,20 @@ export async function isTimeSlotUnavailable(
   time: string,
   options?: {
     ignoreScheduleId?: number;
+    durationMinutes?: number;
   }
 ) {
-  await ensureScheduleSchema();
+  const durationMinutes =
+    options?.durationMinutes ?? DEFAULT_MANUAL_SCHEDULE_DURATION_MINUTES;
+  const context = await buildAvailabilityContext(userId, date);
+  const summary = evaluateTimeSlotAvailability(
+    time,
+    durationMinutes,
+    context,
+    options
+  );
 
-  const [hasScheduleConflict, activeBookingCount, teamQuota] = await Promise.all([
-    hasManualScheduleConflict(userId, date, time, options?.ignoreScheduleId),
-    countActiveBookings(userId, date, time),
-    getPartnerTeamQuota(userId),
-  ]);
-
-  return hasScheduleConflict || activeBookingCount >= teamQuota;
+  return summary.status !== "available";
 }
 
 async function assertScheduleSlotAvailable(
@@ -227,18 +403,22 @@ async function assertScheduleSlotAvailable(
     ignoreScheduleId?: number;
   }
 ) {
-  const [hasScheduleConflict, activeBookingCount] = await Promise.all([
-    hasManualScheduleConflict(
-      userId,
-      input.date,
-      input.time,
-      options?.ignoreScheduleId
-    ),
-    countActiveBookings(userId, input.date, input.time),
-  ]);
+  const context = await buildAvailabilityContext(userId, input.date);
+  const summary = evaluateTimeSlotAvailability(
+    input.time,
+    DEFAULT_MANUAL_SCHEDULE_DURATION_MINUTES,
+    context,
+    options
+  );
 
-  if (hasScheduleConflict || activeBookingCount > 0) {
-    throw new ScheduleConflictError();
+  if (summary.status === "outside_working_hours") {
+    throw new ScheduleConflictError("Jadwal melewati jam kerja partner.");
+  }
+
+  if (summary.status !== "available") {
+    throw new ScheduleConflictError(
+      "Jadwal pada rentang waktu tersebut sudah terisi."
+    );
   }
 }
 
@@ -424,106 +604,44 @@ export async function deletePartnerSchedule(userId: number, scheduleId: number) 
 }
 
 export async function listUnavailableTimeSlots(userId: number, date: string) {
-  const summaries = await listTimeSlotAvailabilitySummaries(userId, date);
+  const summaries = await listTimeSlotAvailabilitySummaries(
+    userId,
+    date,
+    DEFAULT_MANUAL_SCHEDULE_DURATION_MINUTES
+  );
 
   return summaries
-    .filter((item) => item.status === "blocked" || item.status === "full")
+    .filter((item) => item.status !== "available")
     .map((item) => item.time);
 }
 
 export async function listTimeSlotAvailabilitySummaries(
   userId: number,
-  date: string
+  date: string,
+  durationMinutes = DEFAULT_MANUAL_SCHEDULE_DURATION_MINUTES
 ) {
-  await ensureScheduleSchema();
-
   if (!isValidDateInput(date)) {
     return [];
   }
 
-  const pool = getDbPool();
-  const [scheduleRows, bookingRows, teamQuota] = await Promise.all([
-    pool.execute<(RowDataPacket & { schedule_time: string })[]>(
-      `
-        SELECT schedule_time
-        FROM partner_schedules
-        WHERE user_id = ?
-          AND schedule_date = ?
-      `,
-      [userId, date]
-    ),
-    pool.execute<(RowDataPacket & { booking_time: string; total: number })[]>(
-      `
-        SELECT booking_time, COUNT(*) AS total
-        FROM bookings
-        WHERE photographer_user_id = ?
-          AND booking_date = ?
-          AND status <> 'cancelled'
-        GROUP BY booking_time
-      `,
-      [userId, date]
-    ),
-    getPartnerTeamQuota(userId),
-  ]);
-
-  const occupied = new Set<string>();
-  const bookingCounts = new Map<string, number>();
-
-  for (const row of scheduleRows[0]) {
-    if (row.schedule_time) {
-      occupied.add(row.schedule_time);
-    }
+  if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) {
+    return [];
   }
 
-  for (const row of bookingRows[0]) {
-    if (row.booking_time) {
-      bookingCounts.set(row.booking_time, Number(row.total ?? 0));
-    }
-  }
+  const context = await buildAvailabilityContext(userId, date);
 
-  return BOOKING_TIME_SLOTS.map((time) => {
-    const activeBookings = bookingCounts.get(time) ?? 0;
-    const isBlocked = occupied.has(time);
-    const remainingQuota = Math.max(0, teamQuota - activeBookings);
+  return BOOKING_TIME_SLOTS.map((time) =>
+    evaluateTimeSlotAvailability(time, durationMinutes, context)
+  );
+}
 
-    if (isBlocked) {
-      return {
-        time,
-        status: "blocked",
-        activeBookings,
-        teamQuota,
-        remainingQuota: 0,
-      } satisfies TimeSlotAvailabilitySummary;
-    }
-
-    if (activeBookings >= teamQuota) {
-      return {
-        time,
-        status: "full",
-        activeBookings,
-        teamQuota,
-        remainingQuota: 0,
-      } satisfies TimeSlotAvailabilitySummary;
-    }
-
-    if (activeBookings > 0) {
-      return {
-        time,
-        status: "limited",
-        activeBookings,
-        teamQuota,
-        remainingQuota,
-      } satisfies TimeSlotAvailabilitySummary;
-    }
-
-    return {
-      time,
-      status: "available",
-      activeBookings,
-      teamQuota,
-      remainingQuota,
-    } satisfies TimeSlotAvailabilitySummary;
-  });
+export async function listPackageTimeSlotAvailabilitySummaries(
+  userId: number,
+  packageId: number,
+  date: string
+) {
+  const durationMinutes = await getPartnerPackageDurationMinutes(userId, packageId);
+  return listTimeSlotAvailabilitySummaries(userId, date, durationMinutes);
 }
 
 export async function getAdminScheduleCalendar(userId: number, date: string) {

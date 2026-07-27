@@ -43,6 +43,13 @@ export async function POST(request: Request) {
       );
     }
 
+    if (!user.email_verified_at) {
+      return NextResponse.json(
+        { message: "Akun belum diverifikasi. Silakan cek email Anda." },
+        { status: 403 }
+      );
+    }
+
     const safeUser = toSafeUser(user);
     const token = await createSessionToken(safeUser);
     const response = NextResponse.json({

@@ -1,25 +1,13 @@
 import { NextResponse } from "next/server";
-import { type RowDataPacket } from "mysql2/promise";
 
-import { getDbPool } from "@/lib/db";
-
-type PackageRow = RowDataPacket & {
-  id: number;
-  user_id: number;
-  name: string;
-  duration: string;
-  price: number;
-  description: string;
-};
-
-type PartnerRow = RowDataPacket & {
-  user_id: number;
-  brand_name: string;
-  address: string;
-};
+import {
+  getPartnerBookingProfile,
+  listPartnerCategories,
+  listPartnerPackages,
+} from "@/lib/partner-cms";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -27,69 +15,76 @@ export async function GET(
 
     if (!id || id === "undefined") {
       return NextResponse.json(
-        { message: "Invalid partner ID", packages: [] },
+        { message: "Invalid partner ID", packages: [], categories: [] },
         { status: 400 }
       );
     }
 
-    const partnerId = parseInt(id, 10);
+    const partnerId = Number.parseInt(id, 10);
 
-    if (isNaN(partnerId) || partnerId <= 0) {
+    if (!Number.isInteger(partnerId) || partnerId <= 0) {
       return NextResponse.json(
-        { message: "Partner ID must be a valid number", packages: [] },
+        {
+          message: "Partner ID must be a valid number",
+          packages: [],
+          categories: [],
+        },
         { status: 400 }
       );
     }
 
-    const pool = getDbPool();
-    const [partnerRows] = await pool.execute<PartnerRow[]>(
-      `
-        SELECT
-          p.user_id,
-          COALESCE(NULLIF(p.brand_name, ''), u.name) AS brand_name,
-          p.address
-        FROM partner_profiles p
-        INNER JOIN users u ON u.id = p.user_id
-        WHERE u.role = 'admin'
-          AND p.user_id = ?
-        LIMIT 1
-      `,
-      [partnerId]
-    );
+    const { searchParams } = new URL(request.url);
+    const rawCategoryId = searchParams.get("categoryId");
+    const categoryId =
+      rawCategoryId === null || rawCategoryId.trim() === ""
+        ? null
+        : Number(rawCategoryId);
 
-    const partnerRow = partnerRows[0] ?? null;
+    if (
+      categoryId !== null &&
+      (!Number.isInteger(categoryId) || categoryId <= 0)
+    ) {
+      return NextResponse.json(
+        {
+          message: "Category ID must be a valid number",
+          packages: [],
+          categories: [],
+        },
+        { status: 400 }
+      );
+    }
 
-    const query = `
-      SELECT id, user_id, name, duration, price, description
-      FROM partner_packages
-      WHERE user_id = ?
-      ORDER BY id ASC
-    `;
+    const [partnerProfile, categories, packages] = await Promise.all([
+      getPartnerBookingProfile(partnerId),
+      listPartnerCategories(partnerId),
+      listPartnerPackages(partnerId, categoryId),
+    ]);
 
-    const [rows] = await pool.execute<PackageRow[]>(query, [partnerId]);
-
-    const packages = rows.map((row) => ({
-      id: row.id,
-      name: row.name,
-      duration: row.duration,
-      price: row.price,
-      description: row.description,
-    }));
+    if (!partnerProfile) {
+      return NextResponse.json(
+        {
+          message: "Fotografer tidak ditemukan.",
+          partner: null,
+          categories: [],
+          packages: [],
+        },
+        { status: 404 }
+      );
+    }
 
     return NextResponse.json({
-      partner: partnerRow
-        ? {
-            userId: partnerRow.user_id,
-            brandName: partnerRow.brand_name,
-            address: partnerRow.address,
-          }
-        : null,
+      partner: {
+        userId: partnerProfile.userId,
+        brandName: partnerProfile.brandName,
+        address: partnerProfile.address,
+      },
+      categories,
       packages,
     });
   } catch (error) {
     console.error("Error fetching packages:", error);
     return NextResponse.json(
-      { message: "Gagal mengambil data paket.", packages: [] },
+      { message: "Gagal mengambil data paket.", packages: [], categories: [] },
       { status: 500 }
     );
   }

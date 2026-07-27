@@ -1,6 +1,7 @@
 import midtransClient from "midtrans-client";
 import { NextResponse } from "next/server";
 
+import { calculateBookingEndTime } from "@/lib/booking-time";
 import { BookingPricingError, getBookingQuote } from "@/lib/booking-pricing";
 import { BookingSlotUnavailableError, createBooking } from "@/lib/bookings";
 import { getServerSession } from "@/lib/auth/session";
@@ -21,6 +22,7 @@ type PaymentRequestBody = {
   phone?: string;
   amount?: number;
   package?: string;
+  categoryId?: number;
   packageId?: number;
   photographerId?: number;
   date?: string;
@@ -45,6 +47,7 @@ export async function POST(req: Request) {
 
     const body = (await req.json()) as PaymentRequestBody;
     const photographerId = Number(body.photographerId);
+    const categoryId = Number(body.categoryId);
     const packageId = Number(body.packageId);
     const customerUserId = Number(session.sub);
 
@@ -57,6 +60,8 @@ export async function POST(req: Request) {
       !TIME_PATTERN.test(body.time) ||
       !Number.isInteger(photographerId) ||
       photographerId <= 0 ||
+      !Number.isInteger(categoryId) ||
+      categoryId <= 0 ||
       !Number.isInteger(packageId) ||
       packageId <= 0
     ) {
@@ -79,20 +84,31 @@ export async function POST(req: Request) {
       );
     }
 
-    if (await isTimeSlotUnavailable(photographerId, body.date, body.time)) {
-      return NextResponse.json(
-        { error: "Jadwal pada jam tersebut sudah tidak tersedia." },
-        { status: 409 }
-      );
-    }
-
     const quote = await getBookingQuote({
       photographerUserId: photographerId,
+      categoryId,
       packageId,
       eventAddress: body.eventAddress ?? body.location ?? "",
       eventLatitude: Number(body.eventLatitude),
       eventLongitude: Number(body.eventLongitude),
     });
+
+    if (
+      await isTimeSlotUnavailable(photographerId, body.date, body.time, {
+        durationMinutes: quote.packageDurationMinutes,
+      })
+    ) {
+      return NextResponse.json(
+        { error: "Jadwal tidak tersedia untuk durasi paket yang dipilih." },
+        { status: 409 }
+      );
+    }
+
+    const bookingEndTime = calculateBookingEndTime(
+      body.time,
+      quote.packageDurationMinutes
+    );
+
     const midtrans = await getMidtransRuntimeConfig();
 
     const snap = new midtransClient.Snap({
@@ -126,6 +142,7 @@ export async function POST(req: Request) {
           orderId,
           photographerUserId: photographerId,
           customerUserId,
+          categoryId: quote.categoryId,
           packageId: quote.packageId,
           customerName: body.name,
           customerPhone: normalizedCustomerPhone,
@@ -133,6 +150,7 @@ export async function POST(req: Request) {
           amount: quote.totalPrice,
           bookingDate: body.date,
           bookingTime: body.time,
+          bookingEndTime,
           location: quote.eventAddress,
           eventAddress: quote.eventAddress,
           eventLatitude: quote.eventLatitude,
@@ -140,6 +158,8 @@ export async function POST(req: Request) {
           distanceKm: quote.distanceKm,
           transportFee: quote.transportFee,
           packagePrice: quote.packagePrice,
+          serviceFeeRate: quote.serviceFeeRate,
+          serviceFee: quote.serviceFee,
           totalPrice: quote.totalPrice,
           note: body.note || "",
           status: "Pending",
@@ -170,8 +190,8 @@ export async function POST(req: Request) {
         {
           bookingId,
           photographerUserId: photographerId,
-          grossAmount: quote.totalPrice,
-          packagePrice: quote.packagePrice ?? quote.totalPrice,
+          grossAmount: quote.photographerPayoutAmount,
+          packagePrice: quote.packagePrice,
           transportFee: quote.transportFee,
           notes: "Settlement dibuat saat checkout booking.",
         },

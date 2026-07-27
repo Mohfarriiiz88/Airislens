@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 
 import { requireSessionWithRole } from "@/lib/auth/access";
-import { createPartnerPackage, listPartnerPackages } from "@/lib/partner-cms";
+import {
+  PartnerCategoryValidationError,
+  createPartnerPackage,
+  listPartnerCategories,
+  listPartnerPackages,
+} from "@/lib/partner-cms";
 
 export async function GET() {
   const authorized = await requireSessionWithRole(["admin"]);
@@ -10,9 +15,12 @@ export async function GET() {
     return NextResponse.json({ message: "Unauthorized." }, { status: 401 });
   }
 
-  const packages = await listPartnerPackages(authorized.userId);
+  const [categories, packages] = await Promise.all([
+    listPartnerCategories(authorized.userId),
+    listPartnerPackages(authorized.userId),
+  ]);
 
-  return NextResponse.json({ packages });
+  return NextResponse.json({ categories, packages });
 }
 
 export async function POST(request: Request) {
@@ -23,33 +31,53 @@ export async function POST(request: Request) {
   }
 
   const body = (await request.json()) as {
+    categoryId?: number;
     name?: string;
     duration?: string;
     price?: number;
     description?: string;
   };
 
+  const categoryId = Number(body.categoryId);
   const name = body.name?.trim() ?? "";
   const duration = body.duration?.trim() ?? "";
   const price = Number(body.price ?? 0);
   const description = body.description?.trim() ?? "";
 
-  if (!name || !duration || price <= 0) {
+  if (
+    !Number.isInteger(categoryId) ||
+    categoryId <= 0 ||
+    !name ||
+    !duration ||
+    price <= 0
+  ) {
     return NextResponse.json(
-      { message: "Nama, durasi, dan harga paket wajib diisi." },
+      { message: "Kategori, nama, durasi, dan harga paket wajib diisi." },
       { status: 400 }
     );
   }
 
-  const partnerPackage = await createPartnerPackage(authorized.userId, {
-    name,
-    duration,
-    price,
-    description,
-  });
+  try {
+    const partnerPackage = await createPartnerPackage(authorized.userId, {
+      categoryId,
+      name,
+      duration,
+      price,
+      description,
+    });
 
-  return NextResponse.json({
-    message: "Paket berhasil ditambahkan.",
-    package: partnerPackage,
-  });
+    return NextResponse.json({
+      message: "Paket berhasil ditambahkan.",
+      package: partnerPackage,
+    });
+  } catch (error) {
+    if (error instanceof PartnerCategoryValidationError) {
+      return NextResponse.json(
+        { message: error.message },
+        { status: error.status }
+      );
+    }
+
+    throw error;
+  }
 }

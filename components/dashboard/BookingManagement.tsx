@@ -9,23 +9,21 @@ import {
   type AdminBookingStatus,
   type BookingLifecycleStatus,
 } from "@/lib/bookings.shared";
+import { formatBookingTimeWindow } from "@/lib/booking-time";
 
 type BookingManagementProps = {
   bookings: AdminBooking[];
 };
 
-const STATUS_FILTERS = [
-  "All",
-  "AwaitingPayment",
-  "Scheduled",
-  "AwaitingCustomerConfirmation",
-  "Completed",
-  "Cancelled",
-] as const;
+type StatusFilter =
+  | "All"
+  | "AwaitingPayment"
+  | "Scheduled"
+  | "AwaitingCustomerConfirmation"
+  | "Completed"
+  | "Cancelled";
 
-type StatusFilter = (typeof STATUS_FILTERS)[number];
-
-function formatDate(date: string, time: string) {
+function formatDate(date: string, time: string, endTime?: string | null) {
   const formattedDate = new Intl.DateTimeFormat("id-ID", {
     day: "2-digit",
     month: "short",
@@ -33,7 +31,7 @@ function formatDate(date: string, time: string) {
     timeZone: "Asia/Jakarta",
   }).format(new Date(`${date}T00:00:00`));
 
-  return `${formattedDate} - ${time}`;
+  return `${formattedDate} - ${formatBookingTimeWindow(time, endTime)}`;
 }
 
 function getStatusOptions(status: AdminBookingStatus) {
@@ -45,6 +43,14 @@ function getStatusOptions(status: AdminBookingStatus) {
   };
 
   return options[status];
+}
+
+function getPhotographerBookingValue(booking: AdminBooking) {
+  if (booking.packagePrice !== null) {
+    return booking.packagePrice + booking.transportFee;
+  }
+
+  return Math.max(0, (booking.totalPrice ?? booking.amount) - booking.serviceFee);
 }
 
 export default function BookingManagement({
@@ -219,7 +225,7 @@ export default function BookingManagement({
               <th className="font-medium px-6 py-4">Tanggal</th>
               <th className="font-medium px-6 py-4">Lokasi</th>
               <th className="font-medium px-6 py-4">Status</th>
-              <th className="font-medium px-6 py-4">Nilai</th>
+              <th className="font-medium px-6 py-4">Hak Fotografer</th>
               <th className="font-medium px-6 py-4">Aksi</th>
             </tr>
           </thead>
@@ -233,7 +239,11 @@ export default function BookingManagement({
                 <td className="px-6 py-4">{booking.customerName}</td>
                 <td className="px-6 py-4">{booking.packageName}</td>
                 <td className="px-6 py-4">
-                  {formatDate(booking.bookingDate, booking.bookingTime)}
+                  {formatDate(
+                    booking.bookingDate,
+                    booking.bookingTime,
+                    booking.bookingEndTime
+                  )}
                 </td>
                 <td className="px-6 py-4">{booking.location || "-"}</td>
                 <td className="px-6 py-4">
@@ -247,7 +257,7 @@ export default function BookingManagement({
                     style: "currency",
                     currency: "IDR",
                     maximumFractionDigits: 0,
-                  }).format(booking.amount)}
+                  }).format(getPhotographerBookingValue(booking))}
                 </td>
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-2">

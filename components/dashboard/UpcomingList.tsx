@@ -1,4 +1,5 @@
 import { type AdminBooking } from "@/lib/bookings.shared";
+import { formatBookingTimeWindow } from "@/lib/booking-time";
 
 type UpcomingListProps = {
   bookings: AdminBooking[];
@@ -27,7 +28,11 @@ export default function UpcomingList({ bookings }: UpcomingListProps) {
               className="border-b border-black/10 pb-3 last:border-b-0 last:pb-0"
             >
               <div className="font-medium">
-                {booking.bookingTime} - {booking.packageName}
+                {formatBookingTimeWindow(
+                  booking.bookingTime,
+                  booking.bookingEndTime
+                )}{" "}
+                - {booking.packageName}
               </div>
               <div className="text-black/60">
                 {formatDate(booking.bookingDate)} -{" "}

@@ -35,9 +35,22 @@ CREATE TABLE IF NOT EXISTS partner_gallery_items (
   KEY partner_gallery_items_user_id_idx (user_id)
 );
 
+CREATE TABLE IF NOT EXISTS partner_categories (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id BIGINT UNSIGNED NOT NULL,
+  name VARCHAR(50) NOT NULL,
+  slug VARCHAR(80) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY partner_categories_user_slug_unique (user_id, slug),
+  KEY partner_categories_user_id_idx (user_id)
+);
+
 CREATE TABLE IF NOT EXISTS partner_packages (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   user_id BIGINT UNSIGNED NOT NULL,
+  category_id BIGINT UNSIGNED NULL,
   name VARCHAR(100) NOT NULL,
   duration VARCHAR(100) NOT NULL,
   price BIGINT UNSIGNED NOT NULL,
@@ -45,7 +58,8 @@ CREATE TABLE IF NOT EXISTS partner_packages (
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
-  KEY partner_packages_user_id_idx (user_id)
+  KEY partner_packages_user_id_idx (user_id),
+  KEY partner_packages_category_id_idx (category_id)
 );
 
 CREATE TABLE IF NOT EXISTS partner_applications (

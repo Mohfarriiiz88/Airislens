@@ -6,6 +6,7 @@ import {
   getBookingLifecycleLabel,
   type UserBookingHistoryItem,
 } from "@/lib/bookings.shared";
+import { formatBookingTimeWindow } from "@/lib/booking-time";
 
 type BookingHistoryProps = {
   bookings: UserBookingHistoryItem[];
@@ -20,7 +21,7 @@ const tabs = [
   "Cancelled",
 ] as const;
 
-function formatDate(date: string, time: string) {
+function formatDate(date: string, time: string, endTime?: string | null) {
   const formattedDate = new Intl.DateTimeFormat("id-ID", {
     day: "2-digit",
     month: "long",
@@ -28,7 +29,7 @@ function formatDate(date: string, time: string) {
     timeZone: "Asia/Jakarta",
   }).format(new Date(`${date}T00:00:00`));
 
-  return `${formattedDate} - ${time}`;
+  return `${formattedDate} - ${formatBookingTimeWindow(time, endTime)}`;
 }
 
 function formatPrice(amount: number) {
@@ -270,7 +271,12 @@ export default function BookingHistory({ bookings }: BookingHistoryProps) {
                 </h2>
 
                 <p className="text-[16px] text-black/70">
-                  Shooting Date: {formatDate(item.bookingDate, item.bookingTime)}
+                  Shooting Date:{" "}
+                  {formatDate(
+                    item.bookingDate,
+                    item.bookingTime,
+                    item.bookingEndTime
+                  )}
                 </p>
 
                 <p className="text-[15px] text-black/55">
@@ -314,7 +320,7 @@ export default function BookingHistory({ bookings }: BookingHistoryProps) {
                 </p>
 
                 <p className="text-[18px] text-black">
-                  {formatPrice(item.amount)}
+                  {formatPrice(item.totalPrice ?? item.amount)}
                 </p>
 
                 {item.canConfirmCompletion ? (

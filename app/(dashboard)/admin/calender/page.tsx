@@ -3,6 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 
 import {
+  calculateBookingEndTime,
+  DEFAULT_MANUAL_SCHEDULE_DURATION_MINUTES,
+  formatBookingTimeWindow,
+} from "@/lib/booking-time";
+import {
   type BookingCalendarItem,
   type BookingLifecycleStatus,
 } from "@/lib/bookings.shared";
@@ -14,6 +19,7 @@ type PartnerSchedule = {
   title: string;
   date: string;
   time: string;
+  endTime: string;
   location: string;
   note: string;
 };
@@ -51,6 +57,13 @@ function formatDateLabel(value: string) {
     year: "numeric",
     timeZone: "Asia/Jakarta",
   }).format(new Date(`${value}T00:00:00`));
+}
+
+function formatManualSlotRange(time: string) {
+  return formatBookingTimeWindow(
+    time,
+    calculateBookingEndTime(time, DEFAULT_MANUAL_SCHEDULE_DURATION_MINUTES)
+  );
 }
 
 export default function AdminCalendarPage() {
@@ -349,7 +362,7 @@ export default function AdminCalendarPage() {
                     key={time}
                     className="rounded-full bg-black px-3 py-1 text-xs text-white"
                   >
-                    {time}
+                    {formatManualSlotRange(time)}
                   </span>
                 ))}
               </div>
@@ -387,7 +400,11 @@ export default function AdminCalendarPage() {
                     <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                       <div className="space-y-1">
                         <p className="text-base font-medium text-black">
-                          {schedule.time} - {schedule.title}
+                          {formatBookingTimeWindow(
+                            schedule.time,
+                            schedule.endTime
+                          )}{" "}
+                          - {schedule.title}
                         </p>
                         <p className="text-sm text-black/60">
                           {schedule.location || "Lokasi belum diisi"}
@@ -449,7 +466,11 @@ export default function AdminCalendarPage() {
                     <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                       <div className="space-y-1">
                         <p className="text-base font-medium text-black">
-                          {booking.bookingTime} - {booking.packageName}
+                          {formatBookingTimeWindow(
+                            booking.bookingTime,
+                            booking.bookingEndTime
+                          )}{" "}
+                          - {booking.packageName}
                         </p>
                         <p className="text-sm text-black/70">
                           {booking.customerName} -{" "}
@@ -527,7 +548,7 @@ export default function AdminCalendarPage() {
                         value={time}
                         disabled={occupiedTimeSet.has(time) && !isEditingCurrentSlot}
                       >
-                        {time}
+                        {formatManualSlotRange(time)}
                       </option>
                     );
                   })}
@@ -560,7 +581,8 @@ export default function AdminCalendarPage() {
 
               {occupiedTimeSet.size > 0 && (
                 <p className="text-xs text-black/50">
-                  Slot terisi pada tanggal yang dipilih: {Array.from(occupiedTimeSet).join(", ")}
+                  Slot terisi pada tanggal yang dipilih:{" "}
+                  {Array.from(occupiedTimeSet).map(formatManualSlotRange).join(", ")}
                 </p>
               )}
             </div>

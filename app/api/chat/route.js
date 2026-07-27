@@ -43,13 +43,21 @@ function formatPartnerKnowledge(partners) {
         partner.specializations.length > 0
           ? partner.specializations.join(", ")
           : partner.category || "General";
+      const packageGroups = partner.packages.reduce((groups, item) => {
+        const categoryName = item.categoryName || "General";
+        const currentItems = groups[categoryName] || [];
+
+        currentItems.push(
+          `${item.name} (${item.duration}, Rp${Number(item.price).toLocaleString("id-ID")})`
+        );
+        groups[categoryName] = currentItems;
+
+        return groups;
+      }, {});
       const packageSummary =
-        partner.packages.length > 0
-          ? partner.packages
-              .map(
-                (item) =>
-                  `${item.name} (${item.duration}, Rp${Number(item.price).toLocaleString("id-ID")})`
-              )
+        Object.keys(packageGroups).length > 0
+          ? Object.entries(packageGroups)
+              .map(([categoryName, items]) => `${categoryName}: ${items.join(", ")}`)
               .join("; ")
           : "Belum ada paket yang ditampilkan.";
       const location = partner.address?.trim() || "Lokasi belum diisi.";
@@ -66,12 +74,12 @@ function buildWebsiteContext(partners) {
     "Konteks website AirisLens saat ini:",
     "- Halaman utama untuk cari fotografer adalah /findfg.",
     "- Daftar fotografer yang tampil ke publik diambil dari partner admin yang aktif di website.",
-    "- User bisa membuka detail fotografer di /findfg/[slug], melihat profil, spesialisasi, lokasi, kontak WhatsApp, galeri, dan paket layanan.",
-    "- Tombol booking mengarah ke /bookingform?fg={userId fotografer}.",
-    "- Form booking meminta nama, nomor WhatsApp, paket, tanggal, jam, lokasi, dan catatan.",
-    `- Slot jam booking yang tersedia di form: ${BOOKING_TIME_SLOTS.join(", ")}.`,
-    "- Sistem mengecek ketersediaan jadwal. Jika slot pada tanggal dan jam itu sudah terisi, user tidak bisa booking di slot tersebut.",
-    "- Saat submit booking, sistem membuat order, membuka popup pembayaran Midtrans Snap sandbox, dan menyimpan booking terlebih dahulu.",
+    "- User bisa membuka detail fotografer di /findfg/[slug], melihat profil, spesialisasi, lokasi, kontak WhatsApp, galeri, kategori layanan, dan paket yang difilter per kategori.",
+    "- Dari detail fotografer, tombol booking mengarah ke /bookingform?photographerId={userId fotografer}&categoryId={categoryId}&packageId={packageId}.",
+    "- Form booking meminta nama, nomor WhatsApp, kategori layanan, paket, tanggal, jam mulai, lokasi acara, titik koordinat, dan catatan.",
+    `- Pilihan jam mulai booking di form menggunakan slot dasar: ${BOOKING_TIME_SLOTS.join(", ")}.`,
+    "- Sistem mengecek ketersediaan berdasarkan durasi paket, sehingga seluruh rentang waktu booking harus kosong agar user bisa melanjutkan.",
+    "- Saat submit booking, sistem menghitung harga paket, biaya transportasi, biaya layanan, membuat order, membuka popup pembayaran Midtrans Snap sandbox, dan menyimpan booking terlebih dahulu.",
     "- Status booking yang digunakan website: Pending, Confirmed, Completed, dan Cancelled.",
     "- Jika pembayaran sukses, status booking akan diperbarui otomatis lewat notifikasi Midtrans.",
     "- Jika popup pembayaran ditutup atau pembayaran masih pending, booking tetap tercatat dan menunggu update status dari Midtrans.",

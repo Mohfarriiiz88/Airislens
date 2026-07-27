@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 
 type BookingQuoteRequestBody = {
   photographerId?: number;
+  categoryId?: number;
   packageId?: number;
   eventAddress?: string;
   eventLatitude?: number;
@@ -17,6 +18,7 @@ export async function POST(request: Request) {
     const body = (await request.json()) as BookingQuoteRequestBody;
     const quote = await getBookingQuote({
       photographerUserId: Number(body.photographerId),
+      categoryId: Number(body.categoryId),
       packageId: Number(body.packageId),
       eventAddress: body.eventAddress ?? "",
       eventLatitude: Number(body.eventLatitude),

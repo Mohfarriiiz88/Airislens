@@ -16,6 +16,7 @@ export type AdminBooking = {
   orderId: string;
   photographerUserId: number;
   customerUserId: number | null;
+  categoryId: number | null;
   packageId: number | null;
   customerName: string;
   customerPhone: string;
@@ -23,6 +24,7 @@ export type AdminBooking = {
   amount: number;
   bookingDate: string;
   bookingTime: string;
+  bookingEndTime: string | null;
   location: string;
   eventAddress: string | null;
   eventLatitude: number | null;
@@ -30,6 +32,8 @@ export type AdminBooking = {
   distanceKm: number;
   transportFee: number;
   packagePrice: number | null;
+  serviceFeeRate: number;
+  serviceFee: number;
   totalPrice: number | null;
   note: string;
   status: AdminBookingStatus;
@@ -55,14 +59,18 @@ export type UserBookingHistoryItem = {
   id: number;
   orderId: string;
   photographerName: string;
+  categoryId: number | null;
   bookingDate: string;
   bookingTime: string;
+  bookingEndTime: string | null;
   amount: number;
   location: string;
   eventAddress: string | null;
   distanceKm: number;
   transportFee: number;
   packagePrice: number | null;
+  serviceFeeRate: number;
+  serviceFee: number;
   totalPrice: number | null;
   status: AdminBookingStatus;
   lifecycleStatus: BookingLifecycleStatus;
@@ -82,6 +90,7 @@ export type BookingCalendarItem = {
   packageName: string;
   bookingDate: string;
   bookingTime: string;
+  bookingEndTime: string | null;
   location: string;
   status: AdminBookingStatus;
   lifecycleStatus: BookingLifecycleStatus;

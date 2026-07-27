@@ -127,6 +127,62 @@ async function ensureSuperadminSchema(connection) {
       ADD UNIQUE KEY users_superadmin_singleton (superadmin_slot)
     `);
   }
+
+  const emailVerificationColumns = [
+    {
+      name: "email_verified_at",
+      ddl: "ADD COLUMN email_verified_at DATETIME NULL DEFAULT NULL AFTER role",
+    },
+    {
+      name: "verification_token",
+      ddl:
+        "ADD COLUMN verification_token VARCHAR(255) DEFAULT NULL AFTER email_verified_at",
+    },
+    {
+      name: "verification_expires_at",
+      ddl:
+        "ADD COLUMN verification_expires_at DATETIME DEFAULT NULL AFTER verification_token",
+    },
+  ];
+
+  for (const column of emailVerificationColumns) {
+    const [rows] = await connection.execute(
+      `
+        SELECT COLUMN_NAME
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'users'
+          AND COLUMN_NAME = ?
+        LIMIT 1
+      `,
+      [column.name]
+    );
+
+    if (rows.length === 0) {
+      await connection.execute(`
+        ALTER TABLE users
+        ${column.ddl}
+      `);
+    }
+  }
+
+  const [verificationIndexRows] = await connection.execute(
+    `
+      SELECT INDEX_NAME
+      FROM information_schema.STATISTICS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'users'
+        AND INDEX_NAME = 'users_verification_token_unique'
+      LIMIT 1
+    `
+  );
+
+  if (verificationIndexRows.length === 0) {
+    await connection.execute(`
+      ALTER TABLE users
+      ADD UNIQUE KEY users_verification_token_unique (verification_token)
+    `);
+  }
 }
 
 async function upsertSuperadmin(connection, input) {
@@ -152,7 +208,13 @@ async function upsertSuperadmin(connection, input) {
     await connection.execute(
       `
         UPDATE users
-        SET name = ?, email = ?, password_hash = ?
+        SET
+          name = ?,
+          email = ?,
+          password_hash = ?,
+          email_verified_at = COALESCE(email_verified_at, NOW()),
+          verification_token = NULL,
+          verification_expires_at = NULL
         WHERE id = ?
       `,
       [input.name, input.email, passwordHash, existingSuperadmin.id]
@@ -178,7 +240,13 @@ async function upsertSuperadmin(connection, input) {
     await connection.execute(
       `
         UPDATE users
-        SET name = ?, password_hash = ?, role = 'superadmin'
+        SET
+          name = ?,
+          password_hash = ?,
+          role = 'superadmin',
+          email_verified_at = COALESCE(email_verified_at, NOW()),
+          verification_token = NULL,
+          verification_expires_at = NULL
         WHERE id = ?
       `,
       [input.name, passwordHash, existingUserWithEmail.id]
@@ -190,8 +258,16 @@ async function upsertSuperadmin(connection, input) {
 
   await connection.execute(
     `
-      INSERT INTO users (name, email, password_hash, role)
-      VALUES (?, ?, ?, 'superadmin')
+      INSERT INTO users (
+        name,
+        email,
+        password_hash,
+        role,
+        email_verified_at,
+        verification_token,
+        verification_expires_at
+      )
+      VALUES (?, ?, ?, 'superadmin', NOW(), NULL, NULL)
     `,
     [input.name, input.email, passwordHash]
   );

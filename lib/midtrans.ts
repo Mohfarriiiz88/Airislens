@@ -26,6 +26,7 @@ import {
   markSettlementOnHoldDisputeByBookingId,
   markSettlementRefundedByBookingId,
 } from "@/lib/settlements";
+import { calculatePhotographerBookingAmount } from "@/lib/service-fee";
 
 type MidtransTransactionStatusPayload = {
   order_id?: string;
@@ -414,12 +415,25 @@ async function applyMidtransTransactionStatusWithConnection(
   );
 
   if (!existingSettlement) {
+    const photographerGrossAmount =
+      booking.packagePrice !== null
+        ? calculatePhotographerBookingAmount(
+            booking.packagePrice,
+            booking.transportFee
+          )
+        : Math.max(
+            0,
+            (booking.totalPrice ?? booking.amount) - booking.serviceFee
+          );
+
     await createBookingSettlement(
       {
         bookingId: booking.id,
         photographerUserId: booking.photographerUserId,
-        grossAmount: booking.totalPrice ?? booking.amount,
-        packagePrice: booking.packagePrice ?? booking.amount,
+        grossAmount: photographerGrossAmount,
+        packagePrice:
+          booking.packagePrice ??
+          Math.max(0, photographerGrossAmount - booking.transportFee),
         transportFee: booking.transportFee,
         notes: "Settlement dibuat dari sinkronisasi pembayaran Midtrans.",
       },

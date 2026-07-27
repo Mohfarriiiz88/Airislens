@@ -11,11 +11,15 @@ CREATE TABLE `users` (
   `phone` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `password_hash` text COLLATE utf8mb4_unicode_ci NOT NULL,
   `role` enum('superadmin','admin','user') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'user',
+  `email_verified_at` datetime DEFAULT NULL,
+  `verification_token` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `verification_expires_at` datetime DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `superadmin_slot` tinyint GENERATED ALWAYS AS ((case when (`role` = _utf8mb4'superadmin') then 1 else NULL end)) STORED,
   PRIMARY KEY (`id`),
   UNIQUE KEY `users_email_unique` (`email`),
+  UNIQUE KEY `users_verification_token_unique` (`verification_token`),
   UNIQUE KEY `users_superadmin_singleton` (`superadmin_slot`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -45,9 +49,22 @@ CREATE TABLE `partner_profiles` (
   UNIQUE KEY `partner_profiles_slug_unique` (`slug`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE `partner_categories` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `user_id` bigint unsigned NOT NULL,
+  `name` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `slug` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `partner_categories_user_slug_unique` (`user_id`,`slug`),
+  KEY `partner_categories_user_id_idx` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE `partner_packages` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `user_id` bigint unsigned NOT NULL,
+  `category_id` bigint unsigned DEFAULT NULL,
   `name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
   `duration` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
   `price` bigint unsigned NOT NULL,
@@ -55,7 +72,8 @@ CREATE TABLE `partner_packages` (
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  KEY `partner_packages_user_id_idx` (`user_id`)
+  KEY `partner_packages_user_id_idx` (`user_id`),
+  KEY `partner_packages_category_id_idx` (`category_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `partner_gallery_items` (
@@ -107,6 +125,7 @@ CREATE TABLE `bookings` (
   `order_id` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
   `photographer_user_id` bigint unsigned NOT NULL,
   `customer_user_id` bigint unsigned DEFAULT NULL,
+  `category_id` bigint unsigned DEFAULT NULL,
   `package_id` bigint unsigned DEFAULT NULL,
   `customer_name` varchar(191) COLLATE utf8mb4_unicode_ci NOT NULL,
   `customer_phone` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -114,6 +133,7 @@ CREATE TABLE `bookings` (
   `amount` bigint unsigned NOT NULL,
   `booking_date` date NOT NULL,
   `booking_time` varchar(10) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `booking_end_time` time DEFAULT NULL,
   `location` text COLLATE utf8mb4_unicode_ci NOT NULL,
   `event_address` text COLLATE utf8mb4_unicode_ci,
   `event_latitude` decimal(10,8) DEFAULT NULL,
@@ -121,6 +141,8 @@ CREATE TABLE `bookings` (
   `distance_km` decimal(8,2) NOT NULL DEFAULT '0.00',
   `transport_fee` bigint unsigned NOT NULL DEFAULT '0',
   `package_price` bigint unsigned DEFAULT NULL,
+  `service_fee_rate` decimal(5,2) NOT NULL DEFAULT '3.00',
+  `service_fee` int unsigned NOT NULL DEFAULT '0',
   `total_price` bigint unsigned DEFAULT NULL,
   `note` text COLLATE utf8mb4_unicode_ci NOT NULL,
   `status` enum('pending_payment','confirmed','in_progress','awaiting_confirmation','completed','cancelled','disputed','refunded') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending_payment',
@@ -134,6 +156,7 @@ CREATE TABLE `bookings` (
   UNIQUE KEY `bookings_order_id_unique` (`order_id`),
   KEY `bookings_photographer_user_id_idx` (`photographer_user_id`),
   KEY `bookings_customer_user_id_idx` (`customer_user_id`),
+  KEY `bookings_category_id_idx` (`category_id`),
   KEY `bookings_package_id_idx` (`package_id`),
   KEY `bookings_booking_date_idx` (`booking_date`),
   KEY `bookings_status_idx` (`status`)
@@ -295,10 +318,20 @@ ALTER TABLE `partner_profiles`
   ON DELETE CASCADE
   ON UPDATE CASCADE;
 
+ALTER TABLE `partner_categories`
+  ADD CONSTRAINT `fk_partner_categories_user`
+  FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
+  ON DELETE CASCADE
+  ON UPDATE CASCADE;
+
 ALTER TABLE `partner_packages`
   ADD CONSTRAINT `fk_partner_packages_user`
   FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
   ON DELETE CASCADE
+  ON UPDATE CASCADE,
+  ADD CONSTRAINT `fk_partner_packages_category`
+  FOREIGN KEY (`category_id`) REFERENCES `partner_categories` (`id`)
+  ON DELETE SET NULL
   ON UPDATE CASCADE;
 
 ALTER TABLE `partner_gallery_items`
