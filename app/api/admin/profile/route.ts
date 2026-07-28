@@ -84,7 +84,7 @@ export async function PUT(request: Request) {
     latitude?: number | string | null;
     longitude?: number | string | null;
     freeDistanceKm?: number | string | null;
-    transportFeePerKm?: number | string | null;
+    flatTransportFee?: number | string | null;
     partnerType?: PartnerType;
     teamQuota?: number | string | null;
     instagram?: string;
@@ -137,10 +137,10 @@ export async function PUT(request: Request) {
       "Jarak gratis transport",
       5
     );
-    const transportFeePerKm = parseNonNegativeNumber(
-      body.transportFeePerKm,
-      "Biaya transport per km",
-      3000,
+    const flatTransportFee = parseNonNegativeNumber(
+      body.flatTransportFee,
+      "Biaya transportasi jika melebihi batas",
+      0,
       true
     );
     const teamQuota =
@@ -159,7 +159,7 @@ export async function PUT(request: Request) {
       latitude,
       longitude,
       freeDistanceKm,
-      transportFeePerKm,
+      flatTransportFee,
       partnerType,
       teamQuota,
       instagram: body.instagram?.trim() ?? "",

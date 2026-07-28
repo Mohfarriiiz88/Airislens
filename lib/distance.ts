@@ -30,12 +30,11 @@ export function calculateDistanceKm(
 export function calculateTransportFee(
   distanceKm: number,
   freeDistanceKm: number,
-  transportFeePerKm: number
+  flatTransportFee: number
 ) {
-  const billableDistanceKm = Math.max(
-    roundToTwoDecimals(distanceKm - freeDistanceKm),
-    0
-  );
+  if (distanceKm <= freeDistanceKm) {
+    return 0;
+  }
 
-  return Math.round(billableDistanceKm * transportFeePerKm);
+  return Math.max(0, Math.round(flatTransportFee));
 }

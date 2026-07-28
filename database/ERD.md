@@ -27,6 +27,7 @@ erDiagram
         DECIMAL latitude
         DECIMAL longitude
         DECIMAL free_distance_km
+        INT flat_transport_fee
         BIGINT transport_fee_per_km
         ENUM partner_type
         INT team_quota
@@ -283,6 +284,7 @@ erDiagram
 - `PARTNER_CATEGORIES` menyimpan katalog kategori layanan milik masing-masing fotografer, misalnya Wedding atau Prewedding.
 - `PARTNER_PACKAGES.category_id` menghubungkan setiap paket ke kategori layanan yang dipilih fotografer.
 - `PARTNER_PROFILES.commission_rate` adalah snapshot persentase komisi default untuk booking baru partner tersebut.
+- `PARTNER_PROFILES.free_distance_km` dan `flat_transport_fee` dipakai untuk logika transportasi aktif. `transport_fee_per_km` sementara dipertahankan hanya untuk kompatibilitas data lama.
 - `BOOKINGS.category_id` disimpan sebagai snapshot kategori layanan saat booking dibuat. Kolom ini sengaja diperlakukan sebagai snapshot transaksi dan tidak wajib selalu ikut foreign key fisik.
 - `BOOKINGS.package_name` tetap disimpan sebagai snapshot nama paket saat transaksi dibuat.
 - `BOOKINGS.location` dipertahankan untuk kompatibilitas sistem lama, sedangkan data lokasi acara baru disimpan juga di `event_address`, `event_latitude`, dan `event_longitude`.

@@ -15,7 +15,7 @@ type BookingPricingRow = RowDataPacket & {
   latitude: number | null;
   longitude: number | null;
   free_distance_km: number;
-  transport_fee_per_km: number;
+  flat_transport_fee: number;
   category_id: number | null;
   category_name: string | null;
   category_slug: string | null;
@@ -61,7 +61,7 @@ export type BookingQuote = {
   packagePrice: number;
   distanceKm: number;
   freeDistanceKm: number;
-  transportFeePerKm: number;
+  flatTransportFee: number;
   transportFee: number;
   serviceFeeRate: number;
   serviceFee: number;
@@ -134,7 +134,7 @@ export async function getBookingQuote(input: BookingQuoteInput) {
         p.latitude,
         p.longitude,
         p.free_distance_km,
-        p.transport_fee_per_km,
+        p.flat_transport_fee,
         pkg.category_id,
         cat.name AS category_name,
         cat.slug AS category_slug,
@@ -193,7 +193,7 @@ export async function getBookingQuote(input: BookingQuoteInput) {
     input.eventLongitude
   );
   const freeDistanceKm = Number(row.free_distance_km ?? 5);
-  const transportFeePerKm = Number(row.transport_fee_per_km ?? 3000);
+  const flatTransportFee = Number(row.flat_transport_fee ?? 0);
   const packagePrice = Number(row.package_price ?? 0);
   const packageDuration = row.package_duration?.trim() ?? "";
   let packageDurationMinutes: number;
@@ -212,7 +212,7 @@ export async function getBookingQuote(input: BookingQuoteInput) {
   const transportFee = calculateTransportFee(
     distanceKm,
     freeDistanceKm,
-    transportFeePerKm
+    flatTransportFee
   );
   const totals = calculateBookingTotals({
     packagePrice,
@@ -236,7 +236,7 @@ export async function getBookingQuote(input: BookingQuoteInput) {
     packagePrice,
     distanceKm,
     freeDistanceKm,
-    transportFeePerKm,
+    flatTransportFee,
     transportFee: totals.transportFee,
     serviceFeeRate: totals.serviceFeeRate,
     serviceFee: totals.serviceFee,

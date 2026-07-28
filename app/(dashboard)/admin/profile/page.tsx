@@ -14,7 +14,7 @@ type ProfileForm = {
   latitude: string;
   longitude: string;
   freeDistanceKm: string;
-  transportFeePerKm: string;
+  flatTransportFee: string;
   partnerType: "individual" | "studio";
   teamQuota: string;
   instagram: string;
@@ -35,7 +35,7 @@ type ProfileApiResponse = {
   latitude?: number | null;
   longitude?: number | null;
   freeDistanceKm?: number | null;
-  transportFeePerKm?: number | null;
+  flatTransportFee?: number | null;
   partnerType?: "individual" | "studio";
   teamQuota?: number | null;
   instagram?: string;
@@ -65,7 +65,7 @@ const EMPTY_FORM: ProfileForm = {
   latitude: "",
   longitude: "",
   freeDistanceKm: "5",
-  transportFeePerKm: "3000",
+  flatTransportFee: "0",
   partnerType: "individual",
   teamQuota: "1",
   instagram: "",
@@ -98,11 +98,10 @@ function normalizeProfileForm(profile?: ProfileApiResponse | null): ProfileForm 
       profile?.freeDistanceKm === null || profile?.freeDistanceKm === undefined
         ? "5"
         : String(profile.freeDistanceKm),
-    transportFeePerKm:
-      profile?.transportFeePerKm === null ||
-      profile?.transportFeePerKm === undefined
-        ? "3000"
-        : String(profile.transportFeePerKm),
+    flatTransportFee:
+      profile?.flatTransportFee === null || profile?.flatTransportFee === undefined
+        ? "0"
+        : String(profile.flatTransportFee),
     partnerType: profile?.partnerType === "studio" ? "studio" : "individual",
     teamQuota:
       profile?.teamQuota === null || profile?.teamQuota === undefined
@@ -255,7 +254,7 @@ export default function ProfilePage() {
           latitude: form.latitude,
           longitude: form.longitude,
           freeDistanceKm: form.freeDistanceKm,
-          transportFeePerKm: form.transportFeePerKm,
+          flatTransportFee: form.flatTransportFee,
           partnerType: form.partnerType,
           teamQuota: form.partnerType === "individual" ? "1" : form.teamQuota,
           instagram: form.instagram,
@@ -412,17 +411,19 @@ export default function ProfilePage() {
                 </div>
 
                 <div>
-                  <label className="text-sm text-black">Biaya Transport per km</label>
+                  <label className="text-sm text-black">
+                    Biaya Transport Jika Melebihi Batas
+                  </label>
                   <input
                     type="number"
                     step="1"
                     min="0"
-                    value={form.transportFeePerKm}
+                    value={form.flatTransportFee}
                     onChange={(event) =>
-                      handleChange("transportFeePerKm", event.target.value)
+                      handleChange("flatTransportFee", event.target.value)
                     }
                     className="mt-1 w-full rounded-xl border border-black/20 px-4 py-3 text-sm"
-                    placeholder="3000"
+                    placeholder="75000"
                   />
                 </div>
               </div>
@@ -615,9 +616,12 @@ export default function ProfilePage() {
               <div>
                 <p className="text-black/40">Transport</p>
                 <p>
-                  Gratis {form.freeDistanceKm || "0"} km · Rp{" "}
-                  {Number(form.transportFeePerKm || 0).toLocaleString("id-ID")}
-                  /km
+                  Gratis {Number(form.freeDistanceKm || 0).toLocaleString("id-ID", {
+                    maximumFractionDigits: 2,
+                  })}{" "}
+                  km | Rp{" "}
+                  {Number(form.flatTransportFee || 0).toLocaleString("id-ID")} jika
+                  melewati batas
                 </p>
               </div>
             </div>

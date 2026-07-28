@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS partner_profiles (
   latitude DECIMAL(10,8) NULL,
   longitude DECIMAL(11,8) NULL,
   free_distance_km DECIMAL(8,2) NOT NULL DEFAULT 5.00,
+  flat_transport_fee INT UNSIGNED NOT NULL DEFAULT 0,
   transport_fee_per_km BIGINT UNSIGNED NOT NULL DEFAULT 3000,
   partner_type ENUM('individual', 'studio') NOT NULL DEFAULT 'individual',
   team_quota INT UNSIGNED NOT NULL DEFAULT 1,

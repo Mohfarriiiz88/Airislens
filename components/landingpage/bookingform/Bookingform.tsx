@@ -78,7 +78,7 @@ type BookingQuote = {
   packagePrice: number;
   distanceKm: number;
   freeDistanceKm: number;
-  transportFeePerKm: number;
+  flatTransportFee: number;
   transportFee: number;
   serviceFeeRate: number;
   serviceFee: number;
@@ -163,6 +163,13 @@ function formatCurrency(amount: number) {
     currency: "IDR",
     maximumFractionDigits: 0,
   }).format(amount);
+}
+
+function formatDistanceKm(distanceKm: number) {
+  return new Intl.NumberFormat("id-ID", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(distanceKm);
 }
 
 function parseCoordinateInput(value: string, min: number, max: number) {
@@ -1537,8 +1544,14 @@ export default function BookingForm({
                 }
               />
               <Row
-                label="Jarak"
-                value={quote ? `${quote.distanceKm.toFixed(2)} km` : "-"}
+                label="Jarak Lokasi"
+                value={quote ? `${formatDistanceKm(quote.distanceKm)} km` : "-"}
+              />
+              <Row
+                label="Batas Gratis Transportasi"
+                value={
+                  quote ? `${formatDistanceKm(quote.freeDistanceKm)} km` : "-"
+                }
               />
               <Row
                 label="Biaya Transportasi"
@@ -1560,8 +1573,11 @@ export default function BookingForm({
 
             {quote && (
               <div className="rounded-md bg-black/[0.03] px-4 py-3 text-[13px] text-black/70">
-                Gratis transport {quote.freeDistanceKm.toFixed(2)} km. Tarif
-                setelahnya {formatCurrency(quote.transportFeePerKm)}/km.
+                {quote.distanceKm <= quote.freeDistanceKm
+                  ? `Gratis transport sampai ${formatDistanceKm(quote.freeDistanceKm)} km. Lokasi booking ini masih dalam batas gratis.`
+                  : quote.flatTransportFee > 0
+                    ? `Gratis transport sampai ${formatDistanceKm(quote.freeDistanceKm)} km. Lokasi booking ini melewati batas gratis sehingga dikenakan biaya transportasi tetap ${formatCurrency(quote.flatTransportFee)}.`
+                    : `Gratis transport sampai ${formatDistanceKm(quote.freeDistanceKm)} km. Lokasi booking ini melewati batas gratis, tetapi partner tidak mengenakan biaya transportasi tambahan.`}
               </div>
             )}
           </div>

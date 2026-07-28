@@ -25,6 +25,7 @@ type PartnerProfileRow = RowDataPacket & {
   latitude: number | null;
   longitude: number | null;
   free_distance_km: number;
+  flat_transport_fee: number;
   transport_fee_per_km: number;
   partner_type: PartnerType;
   team_quota: number;
@@ -80,7 +81,7 @@ export type AdminPartnerProfile = {
   latitude: number | null;
   longitude: number | null;
   freeDistanceKm: number;
-  transportFeePerKm: number;
+  flatTransportFee: number;
   partnerType: PartnerType;
   teamQuota: number;
   instagram: string;
@@ -138,6 +139,8 @@ export type PublicPartnerDetail = {
   description: string;
   specializations: string[];
   address: string;
+  freeDistanceKm: number;
+  flatTransportFee: number;
   whatsapp: string;
   instagram: string;
   tiktok: string;
@@ -169,7 +172,7 @@ export type PartnerBookingProfile = {
   latitude: number | null;
   longitude: number | null;
   freeDistanceKm: number;
-  transportFeePerKm: number;
+  flatTransportFee: number;
   partnerType: PartnerType;
   teamQuota: number;
 };
@@ -179,7 +182,7 @@ declare global {
   var __airislensPartnerCmsSchemaVersion: number | undefined;
 }
 
-const PARTNER_CMS_SCHEMA_VERSION = 2;
+const PARTNER_CMS_SCHEMA_VERSION = 3;
 
 function parseSpecializations(value: string) {
   try {
@@ -247,7 +250,7 @@ function normalizeProfileRow(row: PartnerProfileRow): AdminPartnerProfile {
     latitude: row.latitude === null ? null : Number(row.latitude),
     longitude: row.longitude === null ? null : Number(row.longitude),
     freeDistanceKm: Number(row.free_distance_km ?? 5),
-    transportFeePerKm: Number(row.transport_fee_per_km ?? 3000),
+    flatTransportFee: Number(row.flat_transport_fee ?? 0),
     partnerType: normalizePartnerType(row.partner_type),
     teamQuota: normalizeTeamQuota(row.team_quota),
     instagram: row.instagram,
@@ -358,6 +361,7 @@ async function ensureSchemaInternal() {
       latitude DECIMAL(10,8) NULL,
       longitude DECIMAL(11,8) NULL,
       free_distance_km DECIMAL(8,2) NOT NULL DEFAULT 5.00,
+      flat_transport_fee INT UNSIGNED NOT NULL DEFAULT 0,
       transport_fee_per_km BIGINT UNSIGNED NOT NULL DEFAULT 3000,
       partner_type ENUM('individual', 'studio') NOT NULL DEFAULT 'individual',
       team_quota INT UNSIGNED NOT NULL DEFAULT 1,
@@ -387,9 +391,13 @@ async function ensureSchemaInternal() {
       definition: "DECIMAL(8,2) NOT NULL DEFAULT 5.00 AFTER longitude",
     },
     {
+      name: "flat_transport_fee",
+      definition: "INT UNSIGNED NOT NULL DEFAULT 0 AFTER free_distance_km",
+    },
+    {
       name: "transport_fee_per_km",
       definition:
-        "BIGINT UNSIGNED NOT NULL DEFAULT 3000 AFTER free_distance_km",
+        "BIGINT UNSIGNED NOT NULL DEFAULT 3000 AFTER flat_transport_fee",
     },
     {
       name: "partner_type",
@@ -673,7 +681,7 @@ export async function getAdminPartnerProfile(userId: number) {
         p.latitude,
         p.longitude,
         p.free_distance_km,
-        p.transport_fee_per_km,
+        p.flat_transport_fee,
         p.partner_type,
         p.team_quota,
         p.instagram,
@@ -728,7 +736,7 @@ export async function upsertAdminPartnerProfile(
         latitude = ?,
         longitude = ?,
         free_distance_km = ?,
-        transport_fee_per_km = ?,
+        flat_transport_fee = ?,
         partner_type = ?,
         team_quota = ?,
         instagram = ?,
@@ -749,7 +757,7 @@ export async function upsertAdminPartnerProfile(
       input.latitude,
       input.longitude,
       input.freeDistanceKm,
-      input.transportFeePerKm,
+      input.flatTransportFee,
       partnerType,
       teamQuota,
       input.instagram,
@@ -773,7 +781,7 @@ export async function upsertAdminPartnerProfile(
     latitude: input.latitude,
     longitude: input.longitude,
     freeDistanceKm: input.freeDistanceKm,
-    transportFeePerKm: input.transportFeePerKm,
+    flatTransportFee: input.flatTransportFee,
     partnerType,
     teamQuota,
     instagram: input.instagram,
@@ -802,7 +810,7 @@ export async function getPartnerBookingProfile(userId: number) {
         p.latitude,
         p.longitude,
         p.free_distance_km,
-        p.transport_fee_per_km,
+        p.flat_transport_fee,
         p.partner_type,
         p.team_quota,
         p.instagram,
@@ -832,7 +840,7 @@ export async function getPartnerBookingProfile(userId: number) {
     latitude: row.latitude === null ? null : Number(row.latitude),
     longitude: row.longitude === null ? null : Number(row.longitude),
     freeDistanceKm: Number(row.free_distance_km ?? 5),
-    transportFeePerKm: Number(row.transport_fee_per_km ?? 3000),
+    flatTransportFee: Number(row.flat_transport_fee ?? 0),
     partnerType: normalizePartnerType(row.partner_type),
     teamQuota: normalizeTeamQuota(row.team_quota),
   } satisfies PartnerBookingProfile;
@@ -1285,6 +1293,8 @@ export async function getPublicPartnerDetailBySlug(slug: string) {
         p.description,
         p.specializations_json,
         p.address,
+        p.free_distance_km,
+        p.flat_transport_fee,
         p.whatsapp,
         p.instagram,
         p.tiktok,
@@ -1318,6 +1328,8 @@ export async function getPublicPartnerDetailBySlug(slug: string) {
     description: profile.description,
     specializations,
     address: profile.address,
+    freeDistanceKm: Number(profile.free_distance_km ?? 5),
+    flatTransportFee: Number(profile.flat_transport_fee ?? 0),
     whatsapp: profile.whatsapp,
     instagram: profile.instagram,
     tiktok: profile.tiktok,

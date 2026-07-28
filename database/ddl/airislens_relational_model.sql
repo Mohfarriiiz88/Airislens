@@ -34,6 +34,7 @@ CREATE TABLE `partner_profiles` (
   `latitude` decimal(10,8) DEFAULT NULL,
   `longitude` decimal(11,8) DEFAULT NULL,
   `free_distance_km` decimal(8,2) NOT NULL DEFAULT '5.00',
+  `flat_transport_fee` int unsigned NOT NULL DEFAULT '0',
   `transport_fee_per_km` bigint unsigned NOT NULL DEFAULT '3000',
   `partner_type` enum('individual','studio') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'individual',
   `team_quota` int unsigned NOT NULL DEFAULT '1',

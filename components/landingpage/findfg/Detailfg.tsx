@@ -36,6 +36,8 @@ type PartnerDetail = {
   description: string;
   specializations: string[];
   address: string;
+  freeDistanceKm: number;
+  flatTransportFee: number;
   whatsapp: string;
   instagram: string;
   tiktok: string;
@@ -50,6 +52,21 @@ type PartnerDetail = {
 function normalizeWhatsappUrl(value: string) {
   const digits = value.replace(/\D/g, "");
   return digits ? `https://wa.me/${digits}` : null;
+}
+
+function formatCurrency(amount: number) {
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
+function formatDistanceKm(distanceKm: number) {
+  return new Intl.NumberFormat("id-ID", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(distanceKm);
 }
 
 function buildBookingHref(input: {
@@ -213,6 +230,23 @@ export default function DetailFg({
             <p className="text-[20px] text-black">
               {partner.address || "Alamat partner belum diisi."}
             </p>
+          </div>
+
+          <div className="mb-6 rounded-3xl border border-black/10 bg-[#faf7f2] px-5 py-4">
+            <p className="mb-2 text-[20px] font-normal text-black">
+              Aturan Transportasi
+            </p>
+            <div className="space-y-2 text-[18px] text-black/75">
+              <p>
+                Gratis transportasi sampai{" "}
+                {formatDistanceKm(partner.freeDistanceKm)} km.
+              </p>
+              <p>
+                {partner.flatTransportFee > 0
+                  ? `Di atas ${formatDistanceKm(partner.freeDistanceKm)} km dikenakan biaya transportasi ${formatCurrency(partner.flatTransportFee)}.`
+                  : `Di atas ${formatDistanceKm(partner.freeDistanceKm)} km tidak dikenakan biaya transportasi tambahan.`}
+              </p>
+            </div>
           </div>
 
           <div className="mb-6 grid gap-3 text-sm text-black/70 md:grid-cols-2">
