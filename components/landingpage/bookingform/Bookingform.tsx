@@ -1084,11 +1084,11 @@ export default function BookingForm({
       </div>
 
       <div className="grid gap-10 md:grid-cols-[1fr_420px]">
-        <div className="space-y-6 text-[18px]">
+        <div className="space-y-6 text-[24px]">
           <div>
-            <p className="mb-3">1. Data Pemesan</p>
+            <p className="mb-3">Data Pemesan</p>
 
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-2 text-[18px]">
               <Input
                 label="Nama Pemesan"
                 placeholder="Nama lengkap"
@@ -1105,7 +1105,7 @@ export default function BookingForm({
           </div>
 
           <div>
-            <p className="mb-3">2. Pilih Kategori Layanan</p>
+            <p className="mb-3">Pilih Kategori Layanan</p>
 
             {error && (
               <p className="mb-3 text-sm text-red-500">{error}</p>
@@ -1127,7 +1127,7 @@ export default function BookingForm({
                       key={item.id}
                       type="button"
                       onClick={() => handleCategoryChange(Number(item.id))}
-                      className={`rounded-full border px-4 py-2 text-sm transition ${
+                      className={`rounded-[10px] border px-4 py-2 text-sm transition ${
                         active
                           ? "border-black bg-black text-white"
                           : "border-black/10 bg-white text-black hover:border-black"
@@ -1148,27 +1148,27 @@ export default function BookingForm({
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
-            <div className="rounded-[24px] border border-black/10 bg-[#faf7f2] px-5 py-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-black/45">
+            <div className="rounded-[15px] border border-black/10 bg-[#fffff] px-5 py-4">
+              <p className="text-xs text-black/45">
                 Kategori aktif
               </p>
-              <p className="mt-2 text-[22px] text-black">
+              <p className="mt-2 text-[18px] text-black">
                 {selectedCategory?.name || "-"}
               </p>
             </div>
 
-            <div className="rounded-[24px] border border-black/10 bg-[#faf7f2] px-5 py-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-black/45">
+            <div className="rounded-[15px] border border-black/10 bg-[#ffffff] px-5 py-4">
+              <p className="text-xs text-black/45">
                 Paket terpilih
               </p>
-              <p className="mt-2 text-[22px] text-black">
+              <p className="mt-2 text-[18px] text-black">
                 {selectedPackage?.name || "Belum dipilih"}
               </p>
             </div>
           </div>
 
           <div>
-            <p className="mb-3">3. Pilih Paket</p>
+            <p className="mb-3">Pilih Paket</p>
 
             {!loading && selectedCategory && visiblePackages.length > 0 && (
               <div className="grid gap-4 md:grid-cols-3">
@@ -1213,13 +1213,13 @@ export default function BookingForm({
           <div className="grid gap-4 md:grid-cols-2">
             <Input
               type="date"
-              label="4. Tanggal"
+              label="Tanggal"
               value={form.date}
               onChange={(value) => update("date", value)}
             />
 
             <Select
-              label="4. Jam Mulai"
+              label="Jam Mulai"
               options={timeSlotOptions}
               value={form.time}
               onChange={handleTimeChange}
@@ -1318,7 +1318,7 @@ export default function BookingForm({
           )}
 
           <Textarea
-            label="5. Lokasi Pemotretan"
+            label="Lokasi Pemotretan"
             value={form.eventAddress}
             onChange={(value) => {
               update("eventAddress", value);
@@ -1328,7 +1328,7 @@ export default function BookingForm({
             }}
           />
 
-          <div className="rounded-[24px] border border-black/10 bg-[linear-gradient(180deg,#fcfbf8_0%,#f3ede6_100%)] p-5">
+          <div className="rounded-[24px] border border-black/10 bg-[#f9f9f9] p-5">
             <div className="flex flex-col gap-3 md:flex-row md:items-end">
               <div className="flex-1">
                 <p className="mb-2 text-sm">Cari alamat di peta</p>
@@ -1459,7 +1459,7 @@ export default function BookingForm({
           )}
 
           <Textarea
-            label="6. Catatan (opsional)"
+            label="Catatan (opsional)"
             value={form.note}
             onChange={(value) => update("note", value)}
           />

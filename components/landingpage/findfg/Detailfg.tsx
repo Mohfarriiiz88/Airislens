@@ -232,7 +232,7 @@ export default function DetailFg({
             </p>
           </div>
 
-          <div className="mb-6 rounded-3xl border border-black/10 bg-[#faf7f2] px-5 py-4">
+          <div className="mb-6 rounded-3xl border border-black/10 bg-[#ffffff] px-5 py-4">
             <p className="mb-2 text-[20px] font-normal text-black">
               Aturan Transportasi
             </p>
