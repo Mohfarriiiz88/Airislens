@@ -24,18 +24,18 @@ export default function WhyChoose() {
             {/* TOP TEXT */}
             <div>
               <p className="text-[18px] md:text-[24px] text-black mb-2">
-                Why Choose Airis?
+                Kenapa Memilih Airis?
               </p>
 
               <h2 className="text-[28px] md:text-[40px] text-black leading-tight">
-                Trusted Platform For<br />
-                Perfect Moments
+                Platform Terpercaya Untuk<br />
+                Momen Sempurna
               </h2>
             </div>
 
             {/* PARAGRAPH */}
             <p className="text-[16px] md:text-[24px] text-black max-w-full md:max-w-[600px] leading-relaxed">
-              Iris is designed to connect you with carefully selected, high-quality photographers you can trust. With seamless booking, transparent pricing, and verified professionals, we make it easier for you to capture every moment with confidence and peace of mind.
+              Airis dirancang untuk menghubungkan Anda dengan fotografer berkualitas yang telah dipilih secara cermat dan dapat dipercaya. Dengan proses pemesanan yang mudah, harga yang transparan, dan partner profesional terverifikasi, kami membantu Anda mengabadikan setiap momen dengan nyaman dan tenang.
             </p>
           </div>
 

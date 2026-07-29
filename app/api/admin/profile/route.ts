@@ -6,6 +6,7 @@ import {
   type PartnerType,
   upsertAdminPartnerProfile,
 } from "@/lib/partner-cms";
+import { assertOwnedUploadUrl, UploadError } from "@/lib/uploads";
 
 function parseOptionalCoordinate(
   value: unknown,
@@ -109,6 +110,15 @@ export async function PUT(request: Request) {
   }
 
   try {
+    const currentProfile = await getAdminPartnerProfile(authorized.userId);
+
+    if (!currentProfile) {
+      return NextResponse.json(
+        { message: "Akun partner tidak ditemukan." },
+        { status: 404 }
+      );
+    }
+
     const latitude = parseOptionalCoordinate(
       body.latitude,
       "Latitude fotografer",
@@ -147,6 +157,14 @@ export async function PUT(request: Request) {
       partnerType === "individual"
         ? 1
         : parseNonNegativeNumber(body.teamQuota, "Kuota tim", 1, true);
+    const profilePhotoUrl = body.profilePhotoUrl?.trim() ?? "";
+
+    if (profilePhotoUrl && profilePhotoUrl !== currentProfile.profilePhotoUrl) {
+      await assertOwnedUploadUrl(profilePhotoUrl, {
+        kind: "profile",
+        userId: authorized.userId,
+      });
+    }
 
     const profile = await upsertAdminPartnerProfile(authorized.userId, {
       brandName,
@@ -166,7 +184,7 @@ export async function PUT(request: Request) {
       tiktok: body.tiktok?.trim() ?? "",
       facebook: body.facebook?.trim() ?? "",
       website: body.website?.trim() ?? "",
-      profilePhotoUrl: body.profilePhotoUrl?.trim() ?? "",
+      profilePhotoUrl,
     });
 
     if (!profile) {
@@ -181,6 +199,13 @@ export async function PUT(request: Request) {
       profile,
     });
   } catch (error) {
+    if (error instanceof UploadError) {
+      return NextResponse.json(
+        { message: error.message },
+        { status: error.status }
+      );
+    }
+
     return NextResponse.json(
       {
         message:

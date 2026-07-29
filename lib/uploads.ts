@@ -1,19 +1,46 @@
 import "server-only";
 
-import { readFile, mkdir, stat, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
+
 import sharp from "sharp";
 
+import {
+  getUploadPathSegmentsFromUrl,
+  isUploadedAssetUrl,
+  UPLOAD_ROUTE_PREFIX,
+} from "@/lib/uploaded-assets";
+
 const ALLOWED_UPLOAD_KINDS = ["profile", "gallery"] as const;
-const UPLOAD_ROUTE_PREFIX = "/uploads";
-const DEFAULT_UPLOADS_DIR = path.join("storage", "uploads");
-const LEGACY_PUBLIC_UPLOADS_DIR = path.join("public", "uploads");
-const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
+const DEFAULT_UPLOAD_ROOT = path.join(
+  /* turbopackIgnore: true */ process.cwd(),
+  "public",
+  "uploads"
+);
+const LEGACY_PUBLIC_UPLOADS_DIR = path.join(
+  /* turbopackIgnore: true */ process.cwd(),
+  "public",
+  "uploads"
+);
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+const MAX_IMAGE_DIMENSION = 2400;
+const WEBP_QUALITY = 82;
+
+const ALLOWED_SOURCE_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+]);
+
+const ALLOWED_SOURCE_FORMATS = new Set(["jpeg", "png", "webp"]);
 
 const CONTENT_TYPE_BY_EXTENSION = new Map<string, string>([
   [".avif", "image/avif"],
   [".bmp", "image/bmp"],
   [".gif", "image/gif"],
+  [".jfif", "image/jpeg"],
   [".jpeg", "image/jpeg"],
   [".jpg", "image/jpeg"],
   [".png", "image/png"],
@@ -22,19 +49,6 @@ const CONTENT_TYPE_BY_EXTENSION = new Map<string, string>([
   [".tiff", "image/tiff"],
   [".webp", "image/webp"],
 ]);
-
-const WEBP_SOURCE_EXTENSIONS = new Set([
-  ".avif",
-  ".bmp",
-  ".jpeg",
-  ".jpg",
-  ".png",
-  ".tif",
-  ".tiff",
-  ".webp",
-]);
-
-const PASSTHROUGH_EXTENSIONS = new Set([".gif", ".svg"]);
 
 export type UploadKind = (typeof ALLOWED_UPLOAD_KINDS)[number];
 
@@ -48,34 +62,29 @@ export class UploadError extends Error {
   }
 }
 
-function sanitizeBaseName(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 60);
-}
-
-function getSafeExtension(fileName: string) {
-  const extension = path.extname(fileName).toLowerCase();
-
-  return CONTENT_TYPE_BY_EXTENSION.has(extension) ? extension : "";
-}
-
-function getUploadsRootDirectory() {
-  const configuredDirectory = process.env.UPLOADS_DIR?.trim();
+function getUploadRootDirectory() {
+  const configuredDirectory = process.env.UPLOAD_ROOT?.trim();
 
   if (!configuredDirectory) {
-    return path.resolve(process.cwd(), DEFAULT_UPLOADS_DIR);
+    return path.resolve(DEFAULT_UPLOAD_ROOT);
   }
 
   return path.isAbsolute(configuredDirectory)
     ? configuredDirectory
-    : path.resolve(process.cwd(), configuredDirectory);
+    : path.resolve(
+        /* turbopackIgnore: true */ process.cwd(),
+        configuredDirectory
+      );
 }
 
 function getLegacyPublicUploadsRootDirectory() {
-  return path.resolve(process.cwd(), LEGACY_PUBLIC_UPLOADS_DIR);
+  return path.resolve(LEGACY_PUBLIC_UPLOADS_DIR);
+}
+
+function getUploadRootDirectories() {
+  return Array.from(
+    new Set([getUploadRootDirectory(), getLegacyPublicUploadsRootDirectory()])
+  );
 }
 
 function buildRelativeUploadPath(kind: UploadKind, fileName: string) {
@@ -100,7 +109,9 @@ function normalizeUploadPathSegments(pathSegments: string[]) {
       !trimmedSegment ||
       trimmedSegment === "." ||
       trimmedSegment === ".." ||
-      trimmedSegment.includes("\\")
+      trimmedSegment.includes("\\") ||
+      trimmedSegment.includes("/") ||
+      trimmedSegment.includes(":")
     ) {
       throw new UploadError("Path upload tidak valid.", 400);
     }
@@ -142,100 +153,10 @@ function getContentTypeForFilePath(filePath: string) {
   );
 }
 
-async function transformUploadedFile(file: File) {
-  if (file.size <= 0) {
-    throw new UploadError("File upload wajib diisi.", 400);
-  }
-
-  if (file.size > MAX_UPLOAD_BYTES) {
-    throw new UploadError("Ukuran file maksimal 15 MB.", 400);
-  }
-
-  const sourceExtension = getSafeExtension(file.name);
-
-  if (!sourceExtension) {
-    throw new UploadError(
-      "Format file tidak didukung. Gunakan JPG, PNG, WEBP, GIF, atau SVG.",
-      400
-    );
-  }
-
-  const sourceBuffer = Buffer.from(await file.arrayBuffer());
-
-  if (PASSTHROUGH_EXTENSIONS.has(sourceExtension)) {
-    return {
-      buffer: sourceBuffer,
-      extension: sourceExtension,
-    };
-  }
-
-  if (!WEBP_SOURCE_EXTENSIONS.has(sourceExtension)) {
-    throw new UploadError("Format file tidak didukung untuk upload gambar.", 400);
-  }
-
-  try {
-    const transformedBuffer = await sharp(sourceBuffer, {
-      failOn: "none",
-    })
-      .rotate()
-      .webp({
-        quality: 86,
-        effort: 4,
-      })
-      .toBuffer();
-
-    return {
-      buffer: transformedBuffer,
-      extension: ".webp",
-    };
-  } catch (error) {
-    throw new UploadError(
-      error instanceof Error
-        ? `Gagal memproses gambar upload: ${error.message}`
-        : "Gagal memproses gambar upload.",
-      400
-    );
-  }
-}
-
-export function isUploadKind(value: string): value is UploadKind {
-  return ALLOWED_UPLOAD_KINDS.includes(value as UploadKind);
-}
-
-export async function saveUploadedFile(input: {
-  file: File;
-  kind: UploadKind;
-  userId: number;
-}) {
-  const { buffer, extension } = await transformUploadedFile(input.file);
-  const safeBaseName =
-    sanitizeBaseName(input.file.name.replace(path.extname(input.file.name), "")) ||
-    input.kind;
-  const fileName = `${input.userId}-${Date.now()}-${safeBaseName}${extension}`;
-  const relativePath = buildRelativeUploadPath(input.kind, fileName);
-  const absoluteDirectory = path.join(
-    getUploadsRootDirectory(),
-    "partners",
-    input.kind
-  );
-
-  await mkdir(absoluteDirectory, { recursive: true });
-
-  const absoluteFilePath = path.join(getUploadsRootDirectory(), relativePath);
-
-  await writeFile(absoluteFilePath, buffer);
-
-  return buildUploadUrl(relativePath);
-}
-
-export async function readUploadedFile(pathSegments: string[]) {
+async function resolveExistingUploadFilePath(pathSegments: string[]) {
   const normalizedPathSegments = normalizeUploadPathSegments(pathSegments);
-  const uploadRoots = [
-    getUploadsRootDirectory(),
-    getLegacyPublicUploadsRootDirectory(),
-  ];
 
-  for (const uploadRoot of uploadRoots) {
+  for (const uploadRoot of getUploadRootDirectories()) {
     const absoluteFilePath = resolvePathWithin(uploadRoot, normalizedPathSegments);
 
     if (!absoluteFilePath) {
@@ -246,11 +167,183 @@ export async function readUploadedFile(pathSegments: string[]) {
       continue;
     }
 
-    return {
-      buffer: await readFile(absoluteFilePath),
-      contentType: getContentTypeForFilePath(absoluteFilePath),
-    };
+    return absoluteFilePath;
   }
 
   return null;
+}
+
+async function transformUploadedFile(file: File) {
+  if (file.size <= 0) {
+    throw new UploadError("File upload wajib diisi.", 400);
+  }
+
+  if (file.size > MAX_UPLOAD_BYTES) {
+    throw new UploadError("Ukuran file maksimal 10 MB.", 400);
+  }
+
+  const mimeType = file.type.trim().toLowerCase();
+
+  if (!ALLOWED_SOURCE_MIME_TYPES.has(mimeType)) {
+    throw new UploadError(
+      "Format file tidak didukung. Gunakan JPG, JPEG, PNG, atau WebP.",
+      400
+    );
+  }
+
+  const sourceBuffer = Buffer.from(await file.arrayBuffer());
+  let metadata: sharp.Metadata;
+
+  try {
+    metadata = await sharp(sourceBuffer, { failOn: "error" }).metadata();
+  } catch {
+    throw new UploadError("Gambar tidak dapat diproses.", 400);
+  }
+
+  if (!metadata.format || !ALLOWED_SOURCE_FORMATS.has(metadata.format)) {
+    throw new UploadError(
+      "Format file tidak didukung. Gunakan JPG, JPEG, PNG, atau WebP.",
+      400
+    );
+  }
+
+  try {
+    return await sharp(sourceBuffer, { failOn: "error" })
+      .autoOrient()
+      .resize({
+        width: MAX_IMAGE_DIMENSION,
+        height: MAX_IMAGE_DIMENSION,
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .webp({
+        quality: WEBP_QUALITY,
+      })
+      .toBuffer();
+  } catch {
+    throw new UploadError("Gambar tidak dapat diproses.", 400);
+  }
+}
+
+function parseOwnedUploadUrl(uploadUrl: string, kind: UploadKind) {
+  const pathSegments = getUploadPathSegmentsFromUrl(uploadUrl);
+
+  if (!pathSegments || pathSegments.length !== 3) {
+    throw new UploadError("URL gambar tidak valid.", 400);
+  }
+
+  const [scope, uploadKind, fileName] = pathSegments;
+
+  if (scope !== "partners" || !isUploadKind(uploadKind) || uploadKind !== kind) {
+    throw new UploadError("URL gambar tidak valid.", 400);
+  }
+
+  return {
+    fileName,
+    pathSegments,
+  };
+}
+
+export function isUploadKind(value: string): value is UploadKind {
+  return ALLOWED_UPLOAD_KINDS.includes(value as UploadKind);
+}
+
+export async function assertOwnedUploadUrl(
+  uploadUrl: string,
+  input: {
+    kind: UploadKind;
+    userId: number;
+  }
+) {
+  const { fileName, pathSegments } = parseOwnedUploadUrl(uploadUrl, input.kind);
+
+  if (
+    !fileName.startsWith(`${input.userId}-`) ||
+    !fileName.toLowerCase().endsWith(".webp")
+  ) {
+    throw new UploadError("Anda tidak memiliki akses ke gambar ini.", 403);
+  }
+
+  const existingFilePath = await resolveExistingUploadFilePath(pathSegments);
+
+  if (!existingFilePath) {
+    throw new UploadError("Gambar upload tidak ditemukan.", 400);
+  }
+}
+
+export async function saveUploadedFile(input: {
+  file: File;
+  kind: UploadKind;
+  userId: number;
+}) {
+  const transformedBuffer = await transformUploadedFile(input.file);
+  const uploadRoot = getUploadRootDirectory();
+  const fileName = `${input.userId}-${randomUUID()}.webp`;
+  const relativePath = buildRelativeUploadPath(input.kind, fileName);
+  const absoluteDirectory = path.join(uploadRoot, "partners", input.kind);
+
+  await mkdir(absoluteDirectory, { recursive: true });
+  await writeFile(path.join(absoluteDirectory, fileName), transformedBuffer);
+
+  return buildUploadUrl(relativePath);
+}
+
+export async function readUploadedFile(pathSegments: string[]) {
+  const absoluteFilePath = await resolveExistingUploadFilePath(pathSegments);
+
+  if (!absoluteFilePath) {
+    return null;
+  }
+
+  return {
+    buffer: await readFile(absoluteFilePath),
+    contentType: getContentTypeForFilePath(absoluteFilePath),
+  };
+}
+
+export async function deleteUploadedFileByUrl(uploadUrl: string) {
+  if (!isUploadedAssetUrl(uploadUrl)) {
+    return false;
+  }
+
+  const pathSegments = getUploadPathSegmentsFromUrl(uploadUrl);
+
+  if (!pathSegments) {
+    return false;
+  }
+
+  const normalizedPathSegments = normalizeUploadPathSegments(pathSegments);
+  let hasDeletedFile = false;
+
+  for (const uploadRoot of getUploadRootDirectories()) {
+    const absoluteFilePath = resolvePathWithin(uploadRoot, normalizedPathSegments);
+
+    if (!absoluteFilePath) {
+      continue;
+    }
+
+    try {
+      const fileStat = await stat(absoluteFilePath);
+
+      if (!fileStat.isFile()) {
+        continue;
+      }
+
+      await unlink(absoluteFilePath);
+      hasDeletedFile = true;
+    } catch (error) {
+      const errorCode =
+        error instanceof Error && "code" in error
+          ? String(error.code)
+          : undefined;
+
+      if (errorCode === "ENOENT") {
+        continue;
+      }
+
+      throw new UploadError("Gagal menghapus file upload.", 500);
+    }
+  }
+
+  return hasDeletedFile;
 }

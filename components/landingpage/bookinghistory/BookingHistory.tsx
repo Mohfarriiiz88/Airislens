@@ -93,7 +93,7 @@ export default function BookingHistory({ bookings }: BookingHistoryProps) {
         type: "success",
         message:
           result?.message ||
-          "Booking selesai berhasil dikonfirmasi dan dana dirilis ke partner.",
+          "Pemesanan selesai berhasil dikonfirmasi dan dana dirilis ke partner.",
       });
     } catch (error) {
       setFeedback({
@@ -117,7 +117,8 @@ export default function BookingHistory({ bookings }: BookingHistoryProps) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          reason: "Customer mengajukan refund dari halaman booking history.",
+          reason:
+            "Pelanggan mengajukan pengembalian dana dari halaman riwayat pemesanan.",
         }),
       });
       const result = (await response.json().catch(() => null)) as
@@ -125,7 +126,9 @@ export default function BookingHistory({ bookings }: BookingHistoryProps) {
         | null;
 
       if (!response.ok) {
-        throw new Error(result?.message || "Gagal mengajukan refund.");
+        throw new Error(
+          result?.message || "Gagal mengajukan pengembalian dana."
+        );
       }
 
       setBookingRows((current) =>
@@ -143,12 +146,15 @@ export default function BookingHistory({ bookings }: BookingHistoryProps) {
         type: "success",
         message:
           result?.message ||
-          "Permintaan refund berhasil dikirim untuk ditinjau superadmin.",
+          "Permintaan pengembalian dana berhasil dikirim untuk ditinjau superadmin.",
       });
     } catch (error) {
       setFeedback({
         type: "error",
-        message: error instanceof Error ? error.message : "Gagal mengajukan refund.",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Gagal mengajukan pengembalian dana.",
       });
     } finally {
       setSavingId(null);
@@ -166,7 +172,8 @@ export default function BookingHistory({ bookings }: BookingHistoryProps) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          reason: "Customer membatalkan booking dari halaman booking history.",
+          reason:
+            "Pelanggan membatalkan pemesanan dari halaman riwayat pemesanan.",
         }),
       });
       const result = (await response.json().catch(() => null)) as
@@ -194,12 +201,15 @@ export default function BookingHistory({ bookings }: BookingHistoryProps) {
       );
       setFeedback({
         type: "success",
-        message: result?.message || "Booking berhasil dibatalkan.",
+        message: result?.message || "Pemesanan berhasil dibatalkan.",
       });
     } catch (error) {
       setFeedback({
         type: "error",
-        message: error instanceof Error ? error.message : "Gagal membatalkan booking.",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Gagal membatalkan pemesanan.",
       });
     } finally {
       setSavingId(null);
@@ -213,12 +223,12 @@ export default function BookingHistory({ bookings }: BookingHistoryProps) {
     >
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-14 mt-10">
         <h1 className="text-black text-[24px] md:text-[40px] leading-tight">
-          Booking <br /> History
+          Riwayat <br /> Pemesanan
         </h1>
 
         <p className="text-black text-[18px] md:text-[20px] max-w-md mt-4 md:mt-0 leading-relaxed">
-          Track your photography sessions, manage your bookings, and review
-          your past experiences with our photographers.
+          Pantau sesi fotografi Anda, kelola pemesanan yang berjalan, dan lihat
+          kembali pengalaman sebelumnya bersama fotografer kami.
         </p>
       </div>
 
@@ -253,7 +263,7 @@ export default function BookingHistory({ bookings }: BookingHistoryProps) {
       <div className="space-y-6">
         {filtered.length === 0 ? (
           <div className="bg-white border border-black/10 p-6 rounded-md text-black/60">
-            Belum ada riwayat booking untuk filter ini.
+            Belum ada riwayat pemesanan untuk filter ini.
           </div>
         ) : (
           filtered.map((item) => (
@@ -263,7 +273,7 @@ export default function BookingHistory({ bookings }: BookingHistoryProps) {
             >
               <div className="space-y-2">
                 <p className="text-[16px] text-black/60">
-                  Booking ID: {item.orderId}
+                  ID Pemesanan: {item.orderId}
                 </p>
 
                 <h2 className="text-[20px] text-black">
@@ -271,7 +281,7 @@ export default function BookingHistory({ bookings }: BookingHistoryProps) {
                 </h2>
 
                 <p className="text-[16px] text-black/70">
-                  Shooting Date:{" "}
+                  Jadwal Sesi:{" "}
                   {formatDate(
                     item.bookingDate,
                     item.bookingTime,
@@ -280,7 +290,7 @@ export default function BookingHistory({ bookings }: BookingHistoryProps) {
                 </p>
 
                 <p className="text-[15px] text-black/55">
-                  Location: {item.eventAddress || item.location || "Lokasi belum diisi"}
+                  Lokasi: {item.eventAddress || item.location || "Lokasi belum diisi"}
                 </p>
 
                 {item.lifecycleStatus === "AwaitingCustomerConfirmation" ||
@@ -296,7 +306,8 @@ export default function BookingHistory({ bookings }: BookingHistoryProps) {
 
                 {item.refundRequestStatus ? (
                   <p className="text-[14px] text-black/60">
-                    Status refund: {getRefundStatusLabel(item.refundRequestStatus)}
+                    Status pengembalian dana:{" "}
+                    {getRefundStatusLabel(item.refundRequestStatus)}
                   </p>
                 ) : null}
               </div>
@@ -343,7 +354,7 @@ export default function BookingHistory({ bookings }: BookingHistoryProps) {
                     disabled={savingId === item.id}
                     className="rounded-full border border-black/15 bg-white px-4 py-2 text-[13px] text-black transition hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {savingId === item.id ? "Membatalkan..." : "Batalkan Booking"}
+                    {savingId === item.id ? "Membatalkan..." : "Batalkan Pesanan"}
                   </button>
                 ) : null}
 
@@ -354,7 +365,9 @@ export default function BookingHistory({ bookings }: BookingHistoryProps) {
                     disabled={savingId === item.id}
                     className="rounded-full border border-red-200 bg-red-50 px-4 py-2 text-[13px] text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {savingId === item.id ? "Mengirim..." : "Ajukan Refund"}
+                    {savingId === item.id
+                      ? "Mengirim..."
+                      : "Ajukan Pengembalian Dana"}
                   </button>
                 ) : null}
               </div>
@@ -370,10 +383,10 @@ function getRefundStatusLabel(status: string) {
   const labels: Record<string, string> = {
     open: "Menunggu review superadmin",
     reviewing: "Sedang direview",
-    resolved_refund: "Refund disetujui",
-    resolved_partial_refund: "Partial refund disetujui",
+    resolved_refund: "Pengembalian dana disetujui",
+    resolved_partial_refund: "Pengembalian dana sebagian disetujui",
     resolved_release: "Dana tetap dirilis",
-    rejected: "Refund ditolak",
+    rejected: "Pengembalian dana ditolak",
   };
 
   return labels[status] ?? status;

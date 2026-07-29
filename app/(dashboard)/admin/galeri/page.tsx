@@ -3,6 +3,8 @@
 import Image from "next/image";
 import { useEffect, useState } from "react";
 
+import { shouldBypassImageOptimization } from "@/lib/uploaded-assets";
+
 type GalleryItem = {
   id: number;
   title: string;
@@ -285,6 +287,7 @@ export default function AdminGaleriPage() {
                   src={item.imageUrl}
                   alt={item.title}
                   fill
+                  unoptimized={shouldBypassImageOptimization(item.imageUrl)}
                   className="object-cover"
                 />
               </div>
@@ -339,14 +342,20 @@ export default function AdminGaleriPage() {
 
               <input
                 type="file"
-                accept="image/*"
+                accept="image/jpeg,image/png,image/webp"
                 onChange={handleFileChange}
                 className="w-full rounded-xl border border-black/20 bg-[#f5f5f5] px-4 py-2 text-sm"
               />
 
               {resolvedPreview && (
                 <div className="relative h-40 w-full overflow-hidden rounded-xl border border-black/20">
-                  <Image src={resolvedPreview} alt="Preview" fill className="object-cover" />
+                  <Image
+                    src={resolvedPreview}
+                    alt="Preview"
+                    fill
+                    unoptimized={shouldBypassImageOptimization(resolvedPreview)}
+                    className="object-cover"
+                  />
                 </div>
               )}
             </div>

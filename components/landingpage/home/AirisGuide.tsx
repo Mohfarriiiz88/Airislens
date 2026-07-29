@@ -20,14 +20,14 @@ export default function AirisGuide() {
           
           {/* LEFT TITLE */}
           <h2 className="text-[28px] md:text-[40px] leading-tight max-w-[400px]">
-            Your Personal<br />
-            Photography Guide<br />
-            Anytime
+            Panduan Fotografi<br />
+            Personal Anda<br />
+            Kapan Saja
           </h2>
 
           {/* RIGHT TEXT */}
           <p className="text-[18px] md:text-[24px] max-w-[600px] leading-relaxed text-white/90">
-            Airis is here to help you find the perfect photographer effortlessly. From recommending the best matches to answering your questions instantly, Airis makes your experience faster, smarter, and more personal.
+            Airis hadir untuk membantu Anda menemukan fotografer yang tepat dengan mudah. Mulai dari rekomendasi yang sesuai sampai menjawab pertanyaan Anda dengan cepat, Airis membuat pengalaman Anda lebih praktis, cerdas, dan personal.
           </p>
 
         </div>

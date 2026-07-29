@@ -24,26 +24,26 @@ export default function PacketSection() {
             
             {/* TITLE */}
             <h2 className="text-[28px] md:text-[40px] text-black mb-2">
-              Choise Your Packet
+              Pilih Paket Anda
             </h2>
 
             {/* DESC */}
             <p className="text-[16px] md:text-[24px] text-black mb-4 md:mb-8 leading-relaxed">
-              Which photography style best suits your story, helping you capture unforgettable moments with the perfect visual touch and artistic direction?
+              Temukan layanan fotografi yang paling sesuai dengan cerita Anda, agar setiap momen penting dapat diabadikan dengan sentuhan visual dan arahan artistik yang tepat.
             </p>
 
             {/* TRUST TEXT */}
             <p className="text-[16px] md:text-[24px] text-black mb-6 md:mb-8">
-              Trusted professionals for your meaningful moments
+              Profesional terpercaya untuk momen-momen penting Anda
             </p>
 
             {/* LIST */}
             <div className="text-black border-t border-black">
-              <PacketItem title="Wedding Photography" />
+              <PacketItem title="Fotografi Pernikahan" />
               <PacketItem title="Prewedding" />
-              <PacketItem title="Event" />
-              <PacketItem title="Product" />
-              <PacketItem title="Graduation" />
+              <PacketItem title="Acara" />
+              <PacketItem title="Produk" />
+              <PacketItem title="Wisuda" />
             </div>
 
           </div>

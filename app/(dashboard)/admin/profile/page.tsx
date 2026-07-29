@@ -3,6 +3,8 @@
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 
+import { shouldBypassImageOptimization } from "@/lib/uploaded-assets";
+
 type ProfileForm = {
   accountEmail: string;
   brandName: string;
@@ -543,6 +545,7 @@ export default function ProfilePage() {
                 src={previewImage}
                 alt={form.brandName || "Partner Photo"}
                 fill
+                unoptimized={shouldBypassImageOptimization(previewImage)}
                 className="object-cover"
               />
             </div>
@@ -551,7 +554,7 @@ export default function ProfilePage() {
               <span className="mb-2 block text-sm text-black">Photo Profile</span>
               <input
                 type="file"
-                accept="image/*"
+                accept="image/jpeg,image/png,image/webp"
                 onChange={handlePhotoChange}
                 className="w-full rounded-xl border border-black/20 px-4 py-3 text-sm"
               />

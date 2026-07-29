@@ -3,12 +3,17 @@ import { NextResponse } from "next/server";
 import { requireSessionWithRole } from "@/lib/auth/access";
 import { isUploadKind, saveUploadedFile, UploadError } from "@/lib/uploads";
 
+export const runtime = "nodejs";
+
 export async function POST(request: Request) {
   try {
     const authorized = await requireSessionWithRole(["admin"]);
 
     if (!authorized) {
-      return NextResponse.json({ message: "Unauthorized." }, { status: 401 });
+      return NextResponse.json(
+        { message: "Anda harus login sebagai admin." },
+        { status: 401 }
+      );
     }
 
     const formData = await request.formData();

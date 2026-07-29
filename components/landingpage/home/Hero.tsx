@@ -56,7 +56,7 @@ export default function Hero() {
         <div className="max-w-xs md:max-w-sm text-right md:text-left">
           {" "}
           <SplitText
-            text="Capture Your Perfect Moment with the Best Photographers"
+            text="Abadikan momen terbaik Anda bersama fotografer pilihan"
             tag="p"
             className="text-[18px] md:text-[24px] italic font-normal text-white leading-[1.4]"
             delay={30}
@@ -73,7 +73,7 @@ export default function Hero() {
         <div className="max-w-xs md:max-w-sm text-right md:text-left">
           {" "}
           <SplitText
-            text="Airis connects you with top professional photographers in Tegal for every special occasion."
+            text="Airis menghubungkan Anda dengan fotografer profesional terbaik di Tegal untuk setiap momen spesial."
             tag="p"
             className="text-[18px] md:text-[24px] font-normal text-white leading-[1.4]"
             delay={20}

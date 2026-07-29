@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 
+import { shouldBypassImageOptimization } from "@/lib/uploaded-assets";
+
 interface GalleryItem {
   id: number;
   title: string;
@@ -49,12 +51,13 @@ export default function Gallery() {
       {/* ================= HEADER ================= */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-16 mt-10">
         <h1 className="text-black text-[24px] md:text-[40px] font-normal leading-tight">
-          Explore Our <br /> Gallery
+          Jelajahi <br /> Galeri Kami
         </h1>
 
         <p className="max-w-md text-black mt-6 md:mt-0 text-[18px] md:text-[24px] leading-relaxed">
-          Discover stunning moments captured by our photographers. Each frame
-          tells a story, crafted with creativity, precision, and emotion.
+          Temukan momen-momen terbaik yang diabadikan oleh para fotografer
+          kami. Setiap bingkai menyimpan cerita yang dibuat dengan kreativitas,
+          presisi, dan emosi.
         </p>
       </div>
 
@@ -86,6 +89,7 @@ export default function Gallery() {
                   src={item.imageUrl}
                   alt={item.title}
                   fill
+                  unoptimized={shouldBypassImageOptimization(item.imageUrl)}
                   className="object-cover"
                   sizes="(max-width: 768px) 50vw, 25vw"
                 />

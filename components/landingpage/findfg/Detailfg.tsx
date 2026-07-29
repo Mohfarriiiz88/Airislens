@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useMemo, useState } from "react";
 
 import BookingGateLink from "@/components/ui/BookingGateLink";
+import { shouldBypassImageOptimization } from "@/lib/uploaded-assets";
 
 type PartnerGalleryItem = {
   id: number;
@@ -106,25 +107,25 @@ export default function DetailFg({
       : [
           {
             id: 1,
-            title: "Preview 1",
-            category: "Portfolio",
+            title: "Pratinjau 1",
+            category: "Portofolio",
             imageUrl: "/images/2.JPG",
           },
           {
             id: 2,
-            title: "Preview 2",
-            category: "Portfolio",
+            title: "Pratinjau 2",
+            category: "Portofolio",
             imageUrl: "/images/3.JPG",
           },
           {
             id: 3,
-            title: "Preview 3",
-            category: "Portfolio",
+            title: "Pratinjau 3",
+            category: "Portofolio",
             imageUrl: "/images/4.JPG",
           },
         ];
   const whatsappUrl = normalizeWhatsappUrl(partner.whatsapp);
-  const bookingMessage = `Untuk melanjutkan booking dengan ${partner.brandName}, silakan login terlebih dahulu. Setelah login, Anda akan langsung diarahkan ke form booking.`;
+  const bookingMessage = `Untuk melanjutkan pemesanan dengan ${partner.brandName}, silakan login terlebih dahulu. Setelah login, Anda akan langsung diarahkan ke formulir pemesanan.`;
 
   const defaultCategory = useMemo(() => {
     if (partner.categories.length === 0) {
@@ -184,6 +185,7 @@ export default function DetailFg({
               src={heroImage}
               alt={partner.brandName}
               fill
+              unoptimized={shouldBypassImageOptimization(heroImage)}
               className="object-cover"
             />
           </div>
@@ -198,6 +200,7 @@ export default function DetailFg({
                   src={item.imageUrl}
                   alt={item.title}
                   fill
+                  unoptimized={shouldBypassImageOptimization(item.imageUrl)}
                   className="object-cover"
                 />
               </div>
@@ -215,7 +218,7 @@ export default function DetailFg({
           </p>
 
           <div className="mb-6">
-            <p className="mb-2 text-[20px] font-normal text-black">Specializations</p>
+            <p className="mb-2 text-[20px] font-normal text-black">Spesialisasi</p>
             <ul className="space-y-1 text-[20px] text-black">
               {partner.specializations.length > 0 ? (
                 partner.specializations.map((item) => <li key={item}>- {item}</li>)
@@ -226,7 +229,7 @@ export default function DetailFg({
           </div>
 
           <div className="mb-6">
-            <p className="mb-2 text-[20px] font-normal text-black">Location</p>
+            <p className="mb-2 text-[20px] font-normal text-black">Lokasi</p>
             <p className="text-[20px] text-black">
               {partner.address || "Alamat partner belum diisi."}
             </p>
@@ -264,7 +267,7 @@ export default function DetailFg({
               modalDescription={bookingMessage}
               className="inline-flex rounded-md bg-black px-10 py-2 text-[18px] text-white"
             >
-              Booking
+              Pesan
             </BookingGateLink>
 
             {whatsappUrl && (
@@ -273,7 +276,7 @@ export default function DetailFg({
                 target="_blank"
                 className="inline-flex items-center rounded-md bg-black px-10 py-2 text-[18px] text-white"
               >
-                Whatsapp Us
+                Hubungi via WhatsApp
               </a>
             )}
           </div>
@@ -282,7 +285,7 @@ export default function DetailFg({
 
       <div className="mt-20 grid items-start gap-12 md:grid-cols-2">
         <h2 className="text-[40px] font-normal text-black">
-          Service <br /> Packages
+          Paket <br /> Layanan
         </h2>
 
         <p className="text-[20px] text-black">
@@ -347,7 +350,7 @@ export default function DetailFg({
                   className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm transition hover:shadow-md"
                 >
                   <p className="mb-3 text-xs uppercase tracking-[0.18em] text-black/45">
-                    {item.categoryName || activeCategory?.name || "General"}
+                    {item.categoryName || activeCategory?.name || "Umum"}
                   </p>
                   <h3 className="mb-2 text-[20px] font-normal text-black">
                     {item.name}
@@ -366,7 +369,7 @@ export default function DetailFg({
                     href={packageBookingHref}
                     loginHref={`/login?next=${encodeURIComponent(packageBookingHref)}`}
                     isAuthenticated={isAuthenticated}
-                    modalDescription={`Silakan login terlebih dahulu untuk memilih paket ${item.name} dan melanjutkan booking dengan ${partner.brandName}.`}
+                    modalDescription={`Silakan login terlebih dahulu untuk memilih paket ${item.name} dan melanjutkan pemesanan dengan ${partner.brandName}.`}
                     className="block w-full rounded-md bg-black py-2 text-center text-[18px] text-white"
                   >
                     Pilih Paket

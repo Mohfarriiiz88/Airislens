@@ -4,6 +4,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
+import { shouldBypassImageOptimization } from "@/lib/uploaded-assets";
+
 type FindFgPartner = {
   userId: number;
   slug: string;
@@ -36,7 +38,7 @@ export default function FindFg({
     }
 
     return [
-      { slug: "all", name: "All" },
+      { slug: "all", name: "Semua" },
       ...Array.from(entries.entries()).map(([slug, name]) => ({ slug, name })),
     ];
   }, [photographers]);
@@ -64,13 +66,13 @@ export default function FindFg({
     >
       <div className="mb-16 mt-10 flex flex-col items-start justify-between md:flex-row md:items-center">
         <h1 className="text-[40px] font-normal leading-tight text-black">
-          Choise Your <br /> Fotographer
+          Pilih <br /> Fotografer Anda
         </h1>
 
         <p className="mt-6 max-w-md text-[24px] leading-relaxed text-black md:mt-0">
-          We carefully select and recommend the best photographers to match
-          your style, ensuring every moment you capture is nothing less than
-          extraordinary.
+          Kami memilih dan merekomendasikan fotografer terbaik yang sesuai
+          dengan gaya Anda, agar setiap momen yang diabadikan terasa lebih
+          istimewa.
         </p>
       </div>
 
@@ -98,7 +100,7 @@ export default function FindFg({
     href="/partner"
     className="text-[18px] font-medium text-black hover:opacity-70 transition"
   >
-    + Partnership
+    + Kemitraan
   </Link>
 
 </div>
@@ -117,6 +119,7 @@ export default function FindFg({
                 src={partner.imageUrl}
                 alt={partner.brandName}
                 fill
+                unoptimized={shouldBypassImageOptimization(partner.imageUrl)}
                 className="object-cover"
               />
 

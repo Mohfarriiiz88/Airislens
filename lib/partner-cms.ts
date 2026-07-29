@@ -98,6 +98,10 @@ export type PartnerGalleryItem = {
   imageUrl: string;
 };
 
+export type PartnerGalleryItemRecord = PartnerGalleryItem & {
+  userId: number;
+};
+
 export type PartnerCategory = {
   id: number;
   name: string;
@@ -868,6 +872,35 @@ export async function listPartnerGalleryItems(userId: number) {
   }));
 }
 
+export async function getPartnerGalleryItemById(itemId: number) {
+  await ensurePartnerCmsSchema();
+
+  const pool = getDbPool();
+  const [rows] = await pool.execute<PartnerGalleryRow[]>(
+    `
+      SELECT id, user_id, title, category, image_url
+      FROM partner_gallery_items
+      WHERE id = ?
+      LIMIT 1
+    `,
+    [itemId]
+  );
+
+  const row = rows[0];
+
+  if (!row) {
+    return null;
+  }
+
+  return {
+    id: row.id,
+    userId: row.user_id,
+    title: row.title,
+    category: row.category,
+    imageUrl: row.image_url,
+  } satisfies PartnerGalleryItemRecord;
+}
+
 export async function createPartnerGalleryItem(
   userId: number,
   input: Omit<PartnerGalleryItem, "id">
@@ -897,7 +930,7 @@ export async function updatePartnerGalleryItem(
   await ensurePartnerCmsSchema();
 
   const pool = getDbPool();
-  await pool.execute(
+  const [result] = await pool.execute<ResultSetHeader>(
     `
       UPDATE partner_gallery_items
       SET title = ?, category = ?, image_url = ?
@@ -907,13 +940,15 @@ export async function updatePartnerGalleryItem(
     `,
     [input.title, input.category, input.imageUrl, itemId, userId]
   );
+
+  return result.affectedRows > 0;
 }
 
 export async function deletePartnerGalleryItem(userId: number, itemId: number) {
   await ensurePartnerCmsSchema();
 
   const pool = getDbPool();
-  await pool.execute(
+  const [result] = await pool.execute<ResultSetHeader>(
     `
       DELETE FROM partner_gallery_items
       WHERE id = ?
@@ -922,6 +957,8 @@ export async function deletePartnerGalleryItem(userId: number, itemId: number) {
     `,
     [itemId, userId]
   );
+
+  return result.affectedRows > 0;
 }
 
 export async function listPartnerCategories(userId: number) {

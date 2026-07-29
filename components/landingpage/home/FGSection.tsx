@@ -15,16 +15,16 @@ export default function FGSection() {
           
           {/* TITLE */}
           <h2 className="text-black text-[28px] md:text-[40px] font-normal leading-tight">
-            Handpicked<br />Photographers Just<br />For You
+            Fotografer Pilihan<br />Yang Kami Kurasi<br />Untuk Anda
           </h2>
 
           {/* TEXT */}
           <div className="max-w-[400px] md:max-w-[500px]">
             <p className="text-black text-[16px] md:text-[24px] mb-4 md:mb-6 leading-relaxed">
-              We carefully select and recommend the best photographers to match your style, ensuring every moment you capture is nothing less than extraordinary.
+              Kami memilih dan merekomendasikan fotografer terbaik yang sesuai dengan gaya Anda, agar setiap momen yang diabadikan terasa istimewa dan berkesan.
             </p>
 
-            <Button>Find</Button>
+            <Button>Cari</Button>
           </div>
         </div>
 
