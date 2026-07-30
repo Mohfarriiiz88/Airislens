@@ -17,7 +17,7 @@ export default function BookingTable() {
             <td className="py-2">Andi</td>
             <td className="text-center">Portrait</td>
             <td className="text-center">12 Mar</td>
-            <td className="text-center">Pending</td>
+            <td className="text-center">Menunggu Pembayaran</td>
           </tr>
         </tbody>
       </table>

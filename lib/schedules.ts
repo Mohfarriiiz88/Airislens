@@ -271,7 +271,14 @@ async function buildAvailabilityContext(userId: number, date: string) {
         FROM bookings
         WHERE photographer_user_id = ?
           AND booking_date = ?
-          AND status <> 'cancelled'
+          AND status IN (
+            'pending_payment',
+            'confirmed',
+            'in_progress',
+            'awaiting_confirmation',
+            'completed',
+            'disputed'
+          )
       `,
       [userId, date]
     ),

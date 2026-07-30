@@ -80,7 +80,7 @@ function buildWebsiteContext(partners) {
     `- Pilihan jam mulai booking di form menggunakan slot dasar: ${BOOKING_TIME_SLOTS.join(", ")}.`,
     "- Sistem mengecek ketersediaan berdasarkan durasi paket, sehingga seluruh rentang waktu booking harus kosong agar user bisa melanjutkan.",
     "- Saat submit booking, sistem menghitung harga paket, biaya transportasi, biaya layanan, membuat order, membuka popup pembayaran Midtrans Snap sandbox, dan menyimpan booking terlebih dahulu.",
-    "- Status booking yang digunakan website: Pending, Confirmed, Completed, dan Cancelled.",
+    "- Status booking database yang digunakan website: pending_payment, confirmed, in_progress, awaiting_confirmation, completed, cancelled, disputed, dan refunded.",
     "- Jika pembayaran sukses, status booking akan diperbarui otomatis lewat notifikasi Midtrans.",
     "- Jika popup pembayaran ditutup atau pembayaran masih pending, booking tetap tercatat dan menunggu update status dari Midtrans.",
     "- Sistem juga mencoba mengirim notifikasi WhatsApp setelah booking dibuat.",

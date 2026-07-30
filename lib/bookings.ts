@@ -25,6 +25,8 @@ import { getDbPool } from "@/lib/db";
 import { ensurePartnerCmsSchema } from "@/lib/partner-cms";
 import { getServiceFeeRatePercent } from "@/lib/service-fee";
 export {
+  ALL_ADMIN_BOOKING_STATUSES,
+  getAdminBookingStatusLabel,
   getBookingLifecycleLabel,
   getBookingLifecycleStatus,
 } from "@/lib/bookings.shared";
@@ -37,7 +39,15 @@ export type {
   UserBookingHistoryItem,
 } from "@/lib/bookings.shared";
 
-type BookingStatusDb = "pending" | "confirmed" | "completed" | "cancelled";
+type BookingStatusDb =
+  | "pending_payment"
+  | "confirmed"
+  | "in_progress"
+  | "awaiting_confirmation"
+  | "completed"
+  | "cancelled"
+  | "disputed"
+  | "refunded";
 
 type DbExecutor = Pool | PoolConnection;
 
@@ -79,7 +89,121 @@ declare global {
   var __airislensBookingSchemaVersion: number | undefined;
 }
 
-const BOOKING_SCHEMA_VERSION = 8;
+const BOOKING_SCHEMA_VERSION = 9;
+
+const BOOKING_STATUS_ENUM_VALUES = [
+  "pending_payment",
+  "confirmed",
+  "in_progress",
+  "awaiting_confirmation",
+  "completed",
+  "cancelled",
+  "disputed",
+  "refunded",
+] as const satisfies BookingStatusDb[];
+
+const BOOKING_ACTIVE_DB_STATUSES = [
+  "pending_payment",
+  "confirmed",
+  "in_progress",
+  "awaiting_confirmation",
+  "completed",
+  "disputed",
+] as const satisfies BookingStatusDb[];
+
+const BOOKING_CANCELLABLE_DB_STATUSES = [
+  "pending_payment",
+  "confirmed",
+] as const satisfies BookingStatusDb[];
+
+const BOOKING_UPCOMING_DB_STATUSES = [
+  "pending_payment",
+  "confirmed",
+  "in_progress",
+] as const satisfies BookingStatusDb[];
+
+const BOOKING_AWAITING_CUSTOMER_CONFIRMATION_DB_STATUSES = [
+  "awaiting_confirmation",
+  "completed",
+] as const satisfies BookingStatusDb[];
+
+const BOOKING_STATUS_ENUM_SQL = BOOKING_STATUS_ENUM_VALUES.map(
+  (value) => `'${value}'`
+).join(", ");
+
+const BOOKING_STATUS_ENUM_WITH_LEGACY_PENDING_SQL = [
+  "'pending'",
+  ...BOOKING_STATUS_ENUM_VALUES.map((value) => `'${value}'`),
+].join(", ");
+
+function toSqlList(values: readonly string[]) {
+  return values.map((value) => `'${value}'`).join(", ");
+}
+
+function isBookingCancellableDbStatus(status: BookingStatusDb) {
+  return status === "pending_payment" || status === "confirmed";
+}
+
+function isBookingAwaitingCustomerConfirmationDbStatus(
+  status: BookingStatusDb
+) {
+  return status === "awaiting_confirmation" || status === "completed";
+}
+
+function getBookingStatusProgressRank(status: BookingStatusDb) {
+  switch (status) {
+    case "pending_payment":
+      return 0;
+    case "confirmed":
+      return 1;
+    case "in_progress":
+      return 2;
+    case "awaiting_confirmation":
+      return 3;
+    case "completed":
+      return 4;
+    default:
+      return null;
+  }
+}
+
+function resolveBookingStatusForDatabaseUpdate(
+  currentStatus: BookingStatusDb,
+  requestedStatus: BookingStatusDb
+) {
+  if (currentStatus === requestedStatus) {
+    return currentStatus;
+  }
+
+  if (requestedStatus === "refunded") {
+    return "refunded" satisfies BookingStatusDb;
+  }
+
+  if (requestedStatus === "disputed") {
+    return currentStatus === "refunded" ? currentStatus : "disputed";
+  }
+
+  if (requestedStatus === "cancelled") {
+    if (
+      currentStatus === "refunded" ||
+      currentStatus === "disputed" ||
+      currentStatus === "completed"
+    ) {
+      return currentStatus;
+    }
+
+    return "cancelled" satisfies BookingStatusDb;
+  }
+
+  const currentRank = getBookingStatusProgressRank(currentStatus);
+  const requestedRank = getBookingStatusProgressRank(requestedStatus);
+
+  if (currentRank === null || requestedRank === null) {
+    return currentStatus;
+  }
+
+  return requestedRank > currentRank ? requestedStatus : currentStatus;
+}
 
 export type CreateBookingInput = {
   orderId: string;
@@ -117,13 +241,22 @@ export class BookingSlotUnavailableError extends Error {
 
 function mapStatusFromDb(status: BookingStatusDb): AdminBookingStatus {
   switch (status) {
+    case "pending_payment":
+      return "Pending";
     case "confirmed":
       return "Confirmed";
+    case "in_progress":
+      return "InProgress";
+    case "awaiting_confirmation":
+      return "AwaitingConfirmation";
     case "completed":
       return "Completed";
     case "cancelled":
       return "Cancelled";
-    case "pending":
+    case "disputed":
+      return "Disputed";
+    case "refunded":
+      return "Refunded";
     default:
       return "Pending";
   }
@@ -131,15 +264,24 @@ function mapStatusFromDb(status: BookingStatusDb): AdminBookingStatus {
 
 function mapStatusToDb(status: AdminBookingStatus): BookingStatusDb {
   switch (status) {
+    case "Pending":
+      return "pending_payment";
     case "Confirmed":
       return "confirmed";
+    case "InProgress":
+      return "in_progress";
+    case "AwaitingConfirmation":
+      return "awaiting_confirmation";
     case "Completed":
       return "completed";
     case "Cancelled":
       return "cancelled";
-    case "Pending":
+    case "Disputed":
+      return "disputed";
+    case "Refunded":
+      return "refunded";
     default:
-      return "pending";
+      return "pending_payment";
   }
 }
 
@@ -287,7 +429,7 @@ async function countActiveBookingsForUpdate(
           booking_end_time,
           ADDTIME(TIME(booking_time), '01:00:00')
         ) > TIME(?)
-        AND status <> 'cancelled'
+        AND status IN (${toSqlList(BOOKING_ACTIVE_DB_STATUSES)})
       FOR UPDATE
     `,
     [photographerUserId, bookingDate, bookingEndTime, bookingTime]
@@ -325,7 +467,7 @@ async function ensureBookingSchemaInternal() {
       service_fee INT UNSIGNED NOT NULL DEFAULT 0,
       total_price BIGINT UNSIGNED NULL,
       note TEXT NOT NULL,
-      status ENUM('pending', 'confirmed', 'completed', 'cancelled') NOT NULL DEFAULT 'pending',
+      status ENUM(${BOOKING_STATUS_ENUM_SQL}) NOT NULL DEFAULT 'pending_payment',
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       PRIMARY KEY (id),
@@ -479,6 +621,58 @@ async function ensureBookingSchemaInternal() {
     await pool.execute(`
       ALTER TABLE bookings
       ADD KEY bookings_category_id_idx (category_id)
+    `);
+  }
+
+  const [statusColumnRows] = await pool.execute<
+    (RowDataPacket & {
+      COLUMN_TYPE: string;
+      COLUMN_DEFAULT: string | null;
+    })[]
+  >(
+    `
+      SELECT COLUMN_TYPE, COLUMN_DEFAULT
+      FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'bookings'
+        AND COLUMN_NAME = 'status'
+      LIMIT 1
+    `
+  );
+
+  const statusColumn = statusColumnRows[0];
+  const currentStatusColumnType = String(statusColumn?.COLUMN_TYPE ?? "")
+    .toLowerCase()
+    .replace(/\s+/g, "");
+  const currentStatusDefault = statusColumn?.COLUMN_DEFAULT ?? null;
+  const finalStatusColumnType = `enum(${BOOKING_STATUS_ENUM_SQL})`.replace(
+    /\s+/g,
+    ""
+  );
+
+  if (
+    currentStatusColumnType !== finalStatusColumnType ||
+    currentStatusDefault !== "pending_payment"
+  ) {
+    await pool.execute(`
+      ALTER TABLE bookings
+      MODIFY COLUMN status ENUM(${BOOKING_STATUS_ENUM_WITH_LEGACY_PENDING_SQL}) NOT NULL DEFAULT 'pending_payment'
+    `);
+
+    await pool.execute(`
+      UPDATE bookings
+      SET status = CASE
+        WHEN status = 'pending' THEN 'pending_payment'
+        WHEN status = 'completed' AND customer_confirmed_at IS NULL THEN 'awaiting_confirmation'
+        ELSE status
+      END
+      WHERE status = 'pending'
+         OR (status = 'completed' AND customer_confirmed_at IS NULL)
+    `);
+
+    await pool.execute(`
+      ALTER TABLE bookings
+      MODIFY COLUMN status ENUM(${BOOKING_STATUS_ENUM_SQL}) NOT NULL DEFAULT 'pending_payment'
     `);
   }
 
@@ -685,18 +879,24 @@ export async function updateAdminBookingStatus(
       SET
         status = ?,
         service_completed_at = CASE
-          WHEN ? = 'completed' THEN COALESCE(service_completed_at, CURRENT_TIMESTAMP)
+          WHEN ? IN ('awaiting_confirmation', 'completed')
+            THEN COALESCE(service_completed_at, CURRENT_TIMESTAMP)
           ELSE service_completed_at
         END,
+        customer_confirmed_at = CASE
+          WHEN ? = 'completed' THEN COALESCE(customer_confirmed_at, CURRENT_TIMESTAMP)
+          ELSE customer_confirmed_at
+        END,
         cancelled_at = CASE
-          WHEN ? = 'cancelled' THEN COALESCE(cancelled_at, CURRENT_TIMESTAMP)
+          WHEN ? IN ('cancelled', 'refunded')
+            THEN COALESCE(cancelled_at, CURRENT_TIMESTAMP)
           ELSE cancelled_at
         END
       WHERE id = ?
         AND photographer_user_id = ?
       LIMIT 1
     `,
-    [nextStatus, nextStatus, nextStatus, bookingId, userId]
+    [nextStatus, nextStatus, nextStatus, nextStatus, bookingId, userId]
   );
 
   return result.affectedRows > 0;
@@ -768,14 +968,56 @@ export async function updateBookingStatusByOrderId(
   }
 
   const executor = getExecutor(connection);
-  const [result] = await executor.execute<ResultSetHeader>(
+  const [rows] = await executor.execute<
+    (RowDataPacket & { status: BookingStatusDb })[]
+  >(
     `
-      UPDATE bookings
-      SET status = ?
+      SELECT status
+      FROM bookings
       WHERE order_id = ?
       LIMIT 1
     `,
-    [mapStatusToDb(status), normalizedOrderId]
+    [normalizedOrderId]
+  );
+
+  const currentStatus = rows[0]?.status;
+
+  if (!currentStatus) {
+    return false;
+  }
+
+  const nextStatus = resolveBookingStatusForDatabaseUpdate(
+    currentStatus,
+    mapStatusToDb(status)
+  );
+
+  if (nextStatus === currentStatus) {
+    return true;
+  }
+
+  const [result] = await executor.execute<ResultSetHeader>(
+    `
+      UPDATE bookings
+      SET
+        status = ?,
+        service_completed_at = CASE
+          WHEN ? IN ('awaiting_confirmation', 'completed')
+            THEN COALESCE(service_completed_at, CURRENT_TIMESTAMP)
+          ELSE service_completed_at
+        END,
+        customer_confirmed_at = CASE
+          WHEN ? = 'completed' THEN COALESCE(customer_confirmed_at, CURRENT_TIMESTAMP)
+          ELSE customer_confirmed_at
+        END,
+        cancelled_at = CASE
+          WHEN ? IN ('cancelled', 'refunded')
+            THEN COALESCE(cancelled_at, CURRENT_TIMESTAMP)
+          ELSE cancelled_at
+        END
+      WHERE order_id = ?
+      LIMIT 1
+    `,
+    [nextStatus, nextStatus, nextStatus, nextStatus, normalizedOrderId]
   );
 
   return result.affectedRows > 0;
@@ -845,10 +1087,13 @@ export async function markCustomerBookingConfirmed(
     `
       UPDATE bookings
       SET
+        status = 'completed',
         customer_confirmed_at = COALESCE(customer_confirmed_at, CURRENT_TIMESTAMP)
       WHERE id = ?
         AND customer_user_id = ?
-        AND status = 'completed'
+        AND status IN (${toSqlList(
+          BOOKING_AWAITING_CUSTOMER_CONFIRMATION_DB_STATUSES
+        )})
       LIMIT 1
     `,
     [bookingId, userId]
@@ -875,7 +1120,7 @@ export async function cancelUserBooking(
         cancel_reason = ?
       WHERE id = ?
         AND customer_user_id = ?
-        AND status IN ('pending', 'confirmed')
+        AND status IN (${toSqlList(BOOKING_CANCELLABLE_DB_STATUSES)})
       LIMIT 1
     `,
     [reason?.trim() || "Dibatalkan oleh customer.", bookingId, userId]
@@ -1021,18 +1266,29 @@ export async function getBookingDashboardSnapshot(
         SUM(CASE WHEN DATE_FORMAT(booking_date, '%Y-%m') = ? THEN 1 ELSE 0 END) AS month_bookings,
         SUM(
           CASE
-            WHEN status <> 'cancelled' THEN GREATEST(
+            WHEN status NOT IN ('cancelled', 'refunded') THEN GREATEST(
               COALESCE(package_price, 0) + COALESCE(transport_fee, 0),
               GREATEST(COALESCE(total_price, amount) - COALESCE(service_fee, 0), 0)
             )
             ELSE 0
           END
         ) AS total_revenue,
-        SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS awaiting_payment_count,
-        SUM(CASE WHEN status = 'confirmed' THEN 1 ELSE 0 END) AS scheduled_count,
-        SUM(CASE WHEN status = 'completed' AND customer_confirmed_at IS NULL THEN 1 ELSE 0 END) AS awaiting_customer_confirmation_count,
-        SUM(CASE WHEN status = 'completed' AND customer_confirmed_at IS NOT NULL THEN 1 ELSE 0 END) AS completed_count,
-        SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled_count
+        SUM(CASE WHEN status = 'pending_payment' THEN 1 ELSE 0 END) AS awaiting_payment_count,
+        SUM(CASE WHEN status IN ('confirmed', 'in_progress') THEN 1 ELSE 0 END) AS scheduled_count,
+        SUM(
+          CASE
+            WHEN status = 'awaiting_confirmation' THEN 1
+            WHEN status = 'completed' AND customer_confirmed_at IS NULL THEN 1
+            ELSE 0
+          END
+        ) AS awaiting_customer_confirmation_count,
+        SUM(
+          CASE
+            WHEN status = 'completed' AND customer_confirmed_at IS NOT NULL THEN 1
+            ELSE 0
+          END
+        ) AS completed_count,
+        SUM(CASE WHEN status IN ('cancelled', 'disputed', 'refunded') THEN 1 ELSE 0 END) AS cancelled_count
       FROM bookings
       WHERE photographer_user_id = ?
     `,
@@ -1114,7 +1370,7 @@ export async function getBookingDashboardSnapshot(
       FROM bookings
       WHERE photographer_user_id = ?
         AND booking_date >= ?
-        AND status IN ('pending', 'confirmed')
+        AND status IN (${toSqlList(BOOKING_UPCOMING_DB_STATUSES)})
       ORDER BY booking_date ASC, booking_time ASC, id ASC
       LIMIT 5
     `,
@@ -1276,7 +1532,7 @@ export async function listUserBookingHistory(userId: number) {
       lifecycleStatusLabel: getBookingLifecycleLabel(lifecycleStatus),
       serviceCompletedAt,
       customerConfirmedAt,
-      canCancelBooking: ["pending", "confirmed"].includes(row.status),
+      canCancelBooking: isBookingCancellableDbStatus(row.status),
       canRequestRefund:
         row.status === "cancelled" &&
         paymentStatus === "paid" &&
@@ -1285,7 +1541,7 @@ export async function listUserBookingHistory(userId: number) {
         ),
       refundRequestStatus,
       canConfirmCompletion:
-        row.status === "completed" &&
+        isBookingAwaitingCustomerConfirmationDbStatus(row.status) &&
         row.service_completed_at !== null &&
         row.customer_confirmed_at === null,
     } satisfies UserBookingHistoryItem;

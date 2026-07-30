@@ -40,7 +40,10 @@ export async function PATCH(
     );
   }
 
-  if (booking.status !== "Completed") {
+  if (
+    booking.status !== "AwaitingConfirmation" &&
+    !(booking.status === "Completed" && !booking.customerConfirmedAt)
+  ) {
     return NextResponse.json(
       { message: "Booking belum dapat dikonfirmasi selesai." },
       { status: 400 }

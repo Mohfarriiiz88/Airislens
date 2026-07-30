@@ -108,13 +108,23 @@ export function mapMidtransStatusToBookingStatus(
     transactionStatus === "deny" ||
     transactionStatus === "cancel" ||
     transactionStatus === "expire" ||
-    transactionStatus === "failure" ||
+    transactionStatus === "failure"
+  ) {
+    return "Cancelled";
+  }
+
+  if (
     transactionStatus === "refund" ||
-    transactionStatus === "partial_refund" ||
+    transactionStatus === "partial_refund"
+  ) {
+    return "Refunded";
+  }
+
+  if (
     transactionStatus === "chargeback" ||
     transactionStatus === "partial_chargeback"
   ) {
-    return "Cancelled";
+    return "Disputed";
   }
 
   return null;

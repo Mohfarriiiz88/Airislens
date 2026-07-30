@@ -32,7 +32,8 @@ export async function getSuperadminDashboardSnapshot() {
         SELECT COALESCE(
           SUM(
             CASE
-              WHEN status <> 'cancelled' THEN COALESCE(total_price, amount)
+              WHEN status NOT IN ('cancelled', 'refunded')
+                THEN COALESCE(total_price, amount)
               ELSE 0
             END
           ),

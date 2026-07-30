@@ -81,6 +81,7 @@ export default function BookingHistory({ bookings }: BookingHistoryProps) {
           booking.id === bookingId
             ? {
                 ...booking,
+                status: "Completed",
                 customerConfirmedAt: confirmedAt,
                 lifecycleStatus: "Completed",
                 lifecycleStatusLabel: getBookingLifecycleLabel("Completed"),

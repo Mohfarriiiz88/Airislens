@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 
 import { requireSessionWithRole } from "@/lib/auth/access";
 import {
+  ALL_ADMIN_BOOKING_STATUSES,
   getAdminBookingById,
+  getAdminBookingStatusLabel,
   type AdminBookingStatus,
   updateAdminBookingStatus,
 } from "@/lib/bookings";
@@ -16,12 +18,7 @@ import {
 
 export const runtime = "nodejs";
 
-const ALLOWED_STATUSES: AdminBookingStatus[] = [
-  "Pending",
-  "Confirmed",
-  "Completed",
-  "Cancelled",
-];
+const ALLOWED_STATUSES = ALL_ADMIN_BOOKING_STATUSES;
 
 function isAllowedStatus(value: unknown): value is AdminBookingStatus {
   return (
@@ -36,9 +33,18 @@ function isValidStatusTransition(
 ) {
   const allowedTransitions: Record<AdminBookingStatus, AdminBookingStatus[]> = {
     Pending: ["Pending", "Confirmed", "Cancelled"],
-    Confirmed: ["Confirmed", "Completed", "Cancelled"],
+    Confirmed: [
+      "Confirmed",
+      "InProgress",
+      "AwaitingConfirmation",
+      "Cancelled",
+    ],
+    InProgress: ["InProgress", "AwaitingConfirmation", "Cancelled"],
+    AwaitingConfirmation: ["AwaitingConfirmation"],
     Completed: ["Completed"],
     Cancelled: ["Cancelled"],
+    Disputed: ["Disputed"],
+    Refunded: ["Refunded"],
   };
 
   return allowedTransitions[currentStatus].includes(nextStatus);
@@ -87,7 +93,9 @@ export async function PATCH(
   if (!isValidStatusTransition(booking.status, body.status)) {
     return NextResponse.json(
       {
-        message: `Perubahan status dari ${booking.status} ke ${body.status} tidak diizinkan.`,
+        message: `Perubahan status dari ${getAdminBookingStatusLabel(
+          booking.status
+        )} ke ${getAdminBookingStatusLabel(body.status)} tidak diizinkan.`,
       },
       { status: 400 }
     );
@@ -128,7 +136,7 @@ export async function PATCH(
 
     let message = "Status booking berhasil diperbarui.";
 
-    if (body.status === "Completed") {
+    if (body.status === "AwaitingConfirmation") {
       await markSettlementReadyToReleaseByBookingId(bookingId, connection);
       message =
         "Booking diselesaikan. Dana escrow menunggu konfirmasi selesai dari customer.";

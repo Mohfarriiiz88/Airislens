@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 
 import {
+  getAdminBookingStatusLabel,
   getBookingLifecycleLabel,
   getBookingLifecycleStatus,
   type AdminBooking,
@@ -37,9 +38,18 @@ function formatDate(date: string, time: string, endTime?: string | null) {
 function getStatusOptions(status: AdminBookingStatus) {
   const options: Record<AdminBookingStatus, AdminBookingStatus[]> = {
     Pending: ["Pending", "Confirmed", "Cancelled"],
-    Confirmed: ["Confirmed", "Completed", "Cancelled"],
+    Confirmed: [
+      "Confirmed",
+      "InProgress",
+      "AwaitingConfirmation",
+      "Cancelled",
+    ],
+    InProgress: ["InProgress", "AwaitingConfirmation", "Cancelled"],
+    AwaitingConfirmation: ["AwaitingConfirmation"],
     Completed: ["Completed"],
     Cancelled: ["Cancelled"],
+    Disputed: ["Disputed"],
+    Refunded: ["Refunded"],
   };
 
   return options[status];
@@ -121,13 +131,15 @@ export default function BookingManagement({
           }
 
           const serviceCompletedAt =
-            nextStatus === "Completed"
+            nextStatus === "AwaitingConfirmation" || nextStatus === "Completed"
               ? booking.serviceCompletedAt ?? new Date().toISOString()
               : booking.serviceCompletedAt;
           const customerConfirmedAt =
-            nextStatus === "Completed" ? booking.customerConfirmedAt : null;
+            nextStatus === "Completed"
+              ? booking.customerConfirmedAt ?? new Date().toISOString()
+              : booking.customerConfirmedAt;
           const cancelledAt =
-            nextStatus === "Cancelled"
+            nextStatus === "Cancelled" || nextStatus === "Refunded"
               ? booking.cancelledAt ?? new Date().toISOString()
               : booking.cancelledAt;
           const lifecycleStatus = getBookingLifecycleStatus({
@@ -273,7 +285,7 @@ export default function BookingManagement({
                     >
                       {getStatusOptions(booking.status).map((option) => (
                         <option key={option} value={option}>
-                          {option}
+                          {getAdminBookingStatusLabel(option)}
                         </option>
                       ))}
                     </select>

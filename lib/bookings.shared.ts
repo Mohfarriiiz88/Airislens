@@ -1,8 +1,23 @@
 export type AdminBookingStatus =
   | "Pending"
   | "Confirmed"
+  | "InProgress"
+  | "AwaitingConfirmation"
   | "Completed"
-  | "Cancelled";
+  | "Cancelled"
+  | "Disputed"
+  | "Refunded";
+
+export const ALL_ADMIN_BOOKING_STATUSES: AdminBookingStatus[] = [
+  "Pending",
+  "Confirmed",
+  "InProgress",
+  "AwaitingConfirmation",
+  "Completed",
+  "Cancelled",
+  "Disputed",
+  "Refunded",
+];
 
 export type BookingLifecycleStatus =
   | "AwaitingPayment"
@@ -101,8 +116,16 @@ export function getBookingLifecycleStatus(input: {
   status: AdminBookingStatus;
   customerConfirmedAt?: string | null;
 }) {
-  if (input.status === "Cancelled") {
+  if (
+    input.status === "Cancelled" ||
+    input.status === "Disputed" ||
+    input.status === "Refunded"
+  ) {
     return "Cancelled" satisfies BookingLifecycleStatus;
+  }
+
+  if (input.status === "AwaitingConfirmation") {
+    return "AwaitingCustomerConfirmation" satisfies BookingLifecycleStatus;
   }
 
   if (input.status === "Completed") {
@@ -111,11 +134,26 @@ export function getBookingLifecycleStatus(input: {
       : ("AwaitingCustomerConfirmation" satisfies BookingLifecycleStatus);
   }
 
-  if (input.status === "Confirmed") {
+  if (input.status === "Confirmed" || input.status === "InProgress") {
     return "Scheduled" satisfies BookingLifecycleStatus;
   }
 
   return "AwaitingPayment" satisfies BookingLifecycleStatus;
+}
+
+export function getAdminBookingStatusLabel(status: AdminBookingStatus) {
+  const labels: Record<AdminBookingStatus, string> = {
+    Pending: "Menunggu Pembayaran",
+    Confirmed: "Dijadwalkan",
+    InProgress: "Sedang Berlangsung",
+    AwaitingConfirmation: "Menunggu Konfirmasi Customer",
+    Completed: "Selesai",
+    Cancelled: "Dibatalkan",
+    Disputed: "Dalam Sengketa",
+    Refunded: "Refund Selesai",
+  };
+
+  return labels[status];
 }
 
 export function getBookingLifecycleLabel(status: BookingLifecycleStatus) {

@@ -347,8 +347,8 @@ async function finalizeApprovedRefund(
 
   const booking = await getBookingByOrderId(payment.orderId, connection);
 
-  if (booking && booking.status !== "Cancelled") {
-    await updateBookingStatusByOrderId(payment.orderId, "Cancelled", connection);
+  if (booking && booking.status !== "Refunded") {
+    await updateBookingStatusByOrderId(payment.orderId, "Refunded", connection);
   }
 
   await connection.execute<ResultSetHeader>(

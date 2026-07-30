@@ -3,8 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { formatBookingTimeWindow } from "@/lib/booking-time";
-
-type BookingStatus = "Pending" | "Confirmed" | "Completed" | "Cancelled";
+import { type AdminBookingStatus } from "@/lib/bookings.shared";
 
 type AdminBookingSummary = {
   id: number;
@@ -15,7 +14,7 @@ type AdminBookingSummary = {
   bookingTime: string;
   bookingEndTime: string | null;
   location: string;
-  status: BookingStatus;
+  status: AdminBookingStatus;
 };
 
 type BookingPopupPayload = {
