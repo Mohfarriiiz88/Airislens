@@ -6,12 +6,16 @@ import { BookingPricingError, getBookingQuote } from "@/lib/booking-pricing";
 import { BookingSlotUnavailableError, createBooking } from "@/lib/bookings";
 import { getServerSession } from "@/lib/auth/session";
 import { getDbPool } from "@/lib/db";
-import { getJwtSecret } from "@/lib/env";
+import { getFonnteConfig } from "@/lib/env";
 import { getMidtransRuntimeConfig } from "@/lib/midtrans-config";
 import { createPayment } from "@/lib/payments";
 import { isTimeSlotUnavailable } from "@/lib/schedules";
 import { createBookingSettlement } from "@/lib/settlements";
-import { normalizeIndonesianPhoneNumber } from "@/lib/whatsapp";
+import {
+  buildBookingWhatsAppMessage,
+  normalizeIndonesianPhoneNumber,
+  sendWhatsAppMessage,
+} from "@/lib/whatsapp";
 
 export const runtime = "nodejs";
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -207,36 +211,26 @@ export async function POST(req: Request) {
     }
 
     try {
-      const notificationResponse = await fetch(
-        new URL("/api/notifications/whatsapp", req.url),
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-airislens-internal-auth": getJwtSecret(),
-          },
-          body: JSON.stringify({
-            customerName: body.name,
-            customerPhone: normalizedCustomerPhone,
-            packageName: quote.packageName,
-            date: body.date,
-            time: body.time,
-            location: quote.eventAddress,
-            note: body.note || "",
-          }),
-          cache: "no-store",
-        }
-      );
+      const { adminPhone } = getFonnteConfig();
+      const message = buildBookingWhatsAppMessage({
+        customerName: body.name,
+        customerPhone: normalizedCustomerPhone,
+        packageName: quote.packageName,
+        date: body.date,
+        time: body.time,
+        location: quote.eventAddress,
+        note: body.note || "",
+      });
+      const notificationResult = await sendWhatsAppMessage({
+        target: adminPhone,
+        message,
+      });
 
-      if (!notificationResponse.ok) {
-        const notificationBody = (await notificationResponse
-          .json()
-          .catch(() => null)) as { error?: string; detail?: string } | null;
-
+      if (!notificationResult.ok) {
         throw new Error(
-          notificationBody?.detail ||
-            notificationBody?.error ||
-            `HTTP ${notificationResponse.status}`
+          notificationResult.body?.detail ||
+            notificationResult.rawBody ||
+            `HTTP ${notificationResult.status}`
         );
       }
     } catch (notificationError) {
