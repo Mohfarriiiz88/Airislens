@@ -47,6 +47,8 @@ type ProfileApiResponse = {
   profilePhotoUrl?: string;
 };
 
+type SubmitState = "idle" | "uploading" | "saving";
+
 const SPECIALIZATION_OPTIONS = [
   "Prewedding & Wedding",
   "Portrait & Personal Branding",
@@ -120,11 +122,24 @@ function normalizeProfileForm(profile?: ProfileApiResponse | null): ProfileForm 
 export default function ProfilePage() {
   const [form, setForm] = useState<ProfileForm>(EMPTY_FORM);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
+  const [submitState, setSubmitState] = useState<SubmitState>("idle");
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState("");
+  const isSubmitting = submitState !== "idle";
+  const submitLabel =
+    submitState === "uploading"
+      ? "Mengunggah Foto..."
+      : submitState === "saving"
+        ? "Menyimpan Profil..."
+        : "Simpan Profile";
+  const submitStatusText =
+    submitState === "uploading"
+      ? "Mengunggah, mengubah ke WebP, dan mengompres foto..."
+      : submitState === "saving"
+        ? "Menyimpan profil partner..."
+        : "";
 
   async function loadProfile() {
     setIsLoading(true);
@@ -236,12 +251,17 @@ export default function ProfilePage() {
   }
 
   async function handleSubmit() {
-    setIsSaving(true);
+    if (isSubmitting) {
+      return;
+    }
+
+    setSubmitState(photoFile ? "uploading" : "saving");
     setIsError(false);
     setMessage("");
 
     try {
       const profilePhotoUrl = await uploadPhotoIfNeeded();
+      setSubmitState("saving");
       const response = await fetch("/api/admin/profile", {
         method: "PUT",
         headers: {
@@ -290,7 +310,7 @@ export default function ProfilePage() {
         error instanceof Error ? error.message : "Tidak dapat terhubung ke server."
       );
     } finally {
-      setIsSaving(false);
+      setSubmitState("idle");
     }
   }
 
@@ -529,10 +549,10 @@ export default function ProfilePage() {
 
               <button
                 onClick={handleSubmit}
-                disabled={isSaving}
+                disabled={isSubmitting}
                 className="w-full rounded-xl bg-black py-3 text-sm text-white hover:opacity-90 disabled:opacity-70"
               >
-                {isSaving ? "Menyimpan..." : "Simpan Profile"}
+                {submitLabel}
               </button>
             </>
           )}
@@ -556,9 +576,24 @@ export default function ProfilePage() {
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
                 onChange={handlePhotoChange}
+                disabled={isSubmitting}
                 className="w-full rounded-xl border border-black/20 px-4 py-3 text-sm"
               />
+              <span className="mt-2 block text-xs text-black/50">
+                Foto otomatis dikonversi ke WebP dan dikompres sebelum disimpan.
+              </span>
+              {photoFile && (
+                <span className="mt-1 block text-xs text-black/60">
+                  File dipilih: <span className="font-medium">{photoFile.name}</span>
+                </span>
+              )}
             </label>
+            {submitStatusText && (
+              <div className="mt-4 flex items-center gap-3 rounded-xl border border-black/10 bg-black/[0.03] px-4 py-3 text-sm text-black">
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-black/20 border-t-black" />
+                <span>{submitStatusText}</span>
+              </div>
+            )}
           </div>
 
           <div className="rounded-[28px] border border-black/10 bg-white p-5">

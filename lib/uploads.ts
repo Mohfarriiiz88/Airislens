@@ -25,7 +25,10 @@ const LEGACY_PUBLIC_UPLOADS_DIR = path.join(
 );
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 const MAX_IMAGE_DIMENSION = 2400;
-const WEBP_QUALITY = 82;
+const MAX_OUTPUT_BYTES = 2 * 1024 * 1024;
+const WEBP_DIMENSION_STEPS = [MAX_IMAGE_DIMENSION, 2000, 1600, 1280];
+const WEBP_QUALITY_STEPS = [82, 76, 70, 64, 58, 52];
+const WEBP_EFFORT = 4;
 
 const ALLOWED_SOURCE_MIME_TYPES = new Set([
   "image/jpeg",
@@ -208,21 +211,42 @@ async function transformUploadedFile(file: File) {
   }
 
   try {
-    return await sharp(sourceBuffer, { failOn: "error" })
-      .autoOrient()
-      .resize({
-        width: MAX_IMAGE_DIMENSION,
-        height: MAX_IMAGE_DIMENSION,
-        fit: "inside",
-        withoutEnlargement: true,
-      })
-      .webp({
-        quality: WEBP_QUALITY,
-      })
-      .toBuffer();
+    let transformedBuffer: Buffer | null = null;
+
+    for (const maxDimension of WEBP_DIMENSION_STEPS) {
+      const pipeline = sharp(sourceBuffer, { failOn: "error" })
+        .autoOrient()
+        .resize({
+          width: maxDimension,
+          height: maxDimension,
+          fit: "inside",
+          withoutEnlargement: true,
+        });
+
+      for (const quality of WEBP_QUALITY_STEPS) {
+        transformedBuffer = await pipeline
+          .clone()
+          .webp({
+            quality,
+            effort: WEBP_EFFORT,
+            smartSubsample: true,
+          })
+          .toBuffer();
+
+        if (transformedBuffer.length <= MAX_OUTPUT_BYTES) {
+          return transformedBuffer;
+        }
+      }
+    }
+
+    if (transformedBuffer) {
+      return transformedBuffer;
+    }
   } catch {
     throw new UploadError("Gambar tidak dapat diproses.", 400);
   }
+
+  throw new UploadError("Gambar tidak dapat diproses.", 400);
 }
 
 function parseOwnedUploadUrl(uploadUrl: string, kind: UploadKind) {

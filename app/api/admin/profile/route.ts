@@ -6,7 +6,11 @@ import {
   type PartnerType,
   upsertAdminPartnerProfile,
 } from "@/lib/partner-cms";
-import { assertOwnedUploadUrl, UploadError } from "@/lib/uploads";
+import {
+  assertOwnedUploadUrl,
+  deleteUploadedFileByUrl,
+  UploadError,
+} from "@/lib/uploads";
 
 function parseOptionalCoordinate(
   value: unknown,
@@ -192,6 +196,10 @@ export async function PUT(request: Request) {
         { message: "Akun partner tidak ditemukan." },
         { status: 404 }
       );
+    }
+
+    if (profilePhotoUrl !== currentProfile.profilePhotoUrl) {
+      await deleteUploadedFileByUrl(currentProfile.profilePhotoUrl);
     }
 
     return NextResponse.json({

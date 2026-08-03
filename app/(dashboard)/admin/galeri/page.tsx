@@ -18,6 +18,8 @@ type GalleryForm = {
   imageUrl: string;
 };
 
+type SubmitState = "idle" | "uploading" | "saving";
+
 const EMPTY_FORM: GalleryForm = {
   title: "",
   category: "",
@@ -27,7 +29,7 @@ const EMPTY_FORM: GalleryForm = {
 export default function AdminGaleriPage() {
   const [items, setItems] = useState<GalleryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
+  const [submitState, setSubmitState] = useState<SubmitState>("idle");
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
   const [open, setOpen] = useState(false);
@@ -35,6 +37,19 @@ export default function AdminGaleriPage() {
   const [form, setForm] = useState<GalleryForm>(EMPTY_FORM);
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
+  const isSubmitting = submitState !== "idle";
+  const submitLabel =
+    submitState === "uploading"
+      ? "Mengunggah Foto..."
+      : submitState === "saving"
+        ? "Menyimpan..."
+        : "Simpan";
+  const submitStatusText =
+    submitState === "uploading"
+      ? "Mengunggah, mengubah ke WebP, dan mengompres foto..."
+      : submitState === "saving"
+        ? "Menyimpan data galeri..."
+        : "";
 
   async function loadItems() {
     setIsLoading(true);
@@ -140,18 +155,23 @@ export default function AdminGaleriPage() {
   }
 
   async function submit() {
+    if (isSubmitting) {
+      return;
+    }
+
     if (!form.title || !form.category || (!form.imageUrl && !file)) {
       setIsError(true);
       setMessage("Judul, kategori, dan gambar wajib diisi.");
       return;
     }
 
-    setIsSaving(true);
+    setSubmitState(file ? "uploading" : "saving");
     setIsError(false);
     setMessage("");
 
     try {
       const imageUrl = await uploadImageIfNeeded();
+      setSubmitState("saving");
       const endpoint = active
         ? `/api/admin/gallery/${active.id}`
         : "/api/admin/gallery";
@@ -208,7 +228,7 @@ export default function AdminGaleriPage() {
         error instanceof Error ? error.message : "Tidak dapat terhubung ke server."
       );
     } finally {
-      setIsSaving(false);
+      setSubmitState("idle");
     }
   }
 
@@ -344,8 +364,17 @@ export default function AdminGaleriPage() {
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
                 onChange={handleFileChange}
+                disabled={isSubmitting}
                 className="w-full rounded-xl border border-black/20 bg-[#f5f5f5] px-4 py-2 text-sm"
               />
+              <p className="text-xs text-black/50">
+                Foto otomatis dikonversi ke WebP dan dikompres sebelum disimpan.
+              </p>
+              {file && (
+                <p className="text-xs text-black/60">
+                  File dipilih: <span className="font-medium">{file.name}</span>
+                </p>
+              )}
 
               {resolvedPreview && (
                 <div className="relative h-40 w-full overflow-hidden rounded-xl border border-black/20">
@@ -356,6 +385,14 @@ export default function AdminGaleriPage() {
                     unoptimized={shouldBypassImageOptimization(resolvedPreview)}
                     className="object-cover"
                   />
+                  {submitStatusText && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/55 px-4">
+                      <div className="flex items-center gap-3 rounded-full bg-white px-4 py-2 text-sm text-black shadow-sm">
+                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-black/20 border-t-black" />
+                        <span>{submitStatusText}</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -364,7 +401,8 @@ export default function AdminGaleriPage() {
               {active && (
                 <button
                   onClick={() => remove(active.id)}
-                  className="rounded-lg border border-red-500/30 px-4 py-2 text-sm text-red-500 hover:bg-red-500/10"
+                  disabled={isSubmitting}
+                  className="rounded-lg border border-red-500/30 px-4 py-2 text-sm text-red-500 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Hapus
                 </button>
@@ -373,17 +411,18 @@ export default function AdminGaleriPage() {
               <div className="flex gap-3">
                 <button
                   onClick={() => setOpen(false)}
-                  className="rounded-lg border border-black/20 px-4 py-2 text-sm text-black/70 hover:bg-black/10"
+                  disabled={isSubmitting}
+                  className="rounded-lg border border-black/20 px-4 py-2 text-sm text-black/70 hover:bg-black/10 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Tutup
                 </button>
 
                 <button
                   onClick={submit}
-                  disabled={isSaving}
+                  disabled={isSubmitting}
                   className="rounded-lg bg-black px-6 py-2 text-sm text-white hover:opacity-90 disabled:opacity-70"
                 >
-                  {isSaving ? "Menyimpan..." : "Simpan"}
+                  {submitLabel}
                 </button>
               </div>
             </div>

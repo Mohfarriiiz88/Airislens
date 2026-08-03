@@ -88,6 +88,10 @@ export async function PATCH(
       );
     }
 
+    if (imageUrl !== existingItem.imageUrl) {
+      await deleteUploadedFileByUrl(existingItem.imageUrl);
+    }
+
     return NextResponse.json({ message: "Foto galeri berhasil diperbarui." });
   } catch (error) {
     if (error instanceof UploadError) {
