@@ -13,7 +13,8 @@ import { isTimeSlotUnavailable } from "@/lib/schedules";
 import { createBookingSettlement } from "@/lib/settlements";
 import {
   buildBookingWhatsAppMessage,
-  normalizeIndonesianPhoneNumber,
+  getWhatsAppValidationServiceErrorMessage,
+  requireRegisteredWhatsAppNumber,
   sendWhatsAppMessage,
 } from "@/lib/whatsapp";
 
@@ -75,16 +76,21 @@ export async function POST(req: Request) {
     let normalizedCustomerPhone: string;
 
     try {
-      normalizedCustomerPhone = normalizeIndonesianPhoneNumber(body.phone);
+      normalizedCustomerPhone = await requireRegisteredWhatsAppNumber(body.phone);
     } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Format nomor WhatsApp tidak valid.";
+
       return NextResponse.json(
         {
-          error:
-            error instanceof Error
-              ? error.message
-              : "Format nomor WhatsApp tidak valid.",
+          error: message,
         },
-        { status: 400 }
+        {
+          status:
+            message === getWhatsAppValidationServiceErrorMessage() ? 503 : 400,
+        }
       );
     }
 
@@ -240,6 +246,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       token: transaction.token,
+      orderId,
       breakdown: quote,
     });
   } catch (error) {
