@@ -76,34 +76,21 @@ export default function FindFg({
         </p>
       </div>
 
-      <div className="mb-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-
-  {/* LEFT: CATEGORY */}
-  <div className="flex flex-wrap gap-4 text-[18px] text-gray-400 md:gap-8">
-    {categories.map((category) => (
-      <button
-        key={category.slug}
-        onClick={() => setActiveCategory(category.slug)}
-        className={`transition ${
-          activeCategory === category.slug
-            ? "font-medium text-black"
-            : "hover:text-black"
-        }`}
-      >
-        {category.name}
-      </button>
-    ))}
-  </div>
-
-  {/* RIGHT: PARTNERSHIP BUTTON */}
-  <Link
-    href="/partner"
-    className="text-[18px] font-medium text-black hover:opacity-70 transition"
-  >
-    + Kemitraan
-  </Link>
-
-</div>
+      <div className="mb-10 flex flex-wrap gap-4 text-[18px] text-gray-400 md:gap-8">
+        {categories.map((category) => (
+          <button
+            key={category.slug}
+            onClick={() => setActiveCategory(category.slug)}
+            className={`transition ${
+              activeCategory === category.slug
+                ? "font-medium text-black"
+                : "hover:text-black"
+            }`}
+          >
+            {category.name}
+          </button>
+        ))}
+      </div>
       <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 md:grid-cols-4">
         {filtered.map((partner) => (
           <Link

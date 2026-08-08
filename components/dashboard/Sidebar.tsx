@@ -23,7 +23,7 @@ const menu = [
   { label: "Paket", href: "/admin/paket", icon: Package },
   { label: "Galeri", href: "/admin/galeri", icon: Image },
   { label: "Keuangan", href: "/admin/finance", icon: Wallet },
-  { label: "Profile", href: "/admin/profile", icon: User },
+  { label: "Profil", href: "/admin/profile", icon: User },
 ];
 
 export default function Sidebar() {
@@ -116,7 +116,7 @@ export default function Sidebar() {
       <ExternalLink size={20} strokeWidth={1.5} />
     </div>
 
-    {!collapsed && <span>Back to Website</span>}
+    {!collapsed && <span>Kembali ke Situs</span>}
   </Link>
 
   {/* ===== LOGOUT ===== */}
@@ -134,7 +134,7 @@ export default function Sidebar() {
       <LogOut size={20} strokeWidth={1.5} />
     </div>
 
-    {!collapsed && <span>Logout</span>}
+    {!collapsed && <span>Keluar</span>}
   </button>
 
 </div>

@@ -5,19 +5,24 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-const navItems = [
-  { name: "Home", href: "/" },
-  { name: "FindFG", href: "/findfg" },
-  { name: "Gallery", href: "/gallery" },
-  { name: "History", href: "/bookinghistory" },
+const baseNavItems = [
+  { name: "Beranda", href: "/" },
+  { name: "Fotografer", href: "/findfg" },
+  { name: "Galeri", href: "/gallery" },
+  { name: "Riwayat", href: "/bookinghistory" },
 ];
 
+const partnerNavItem = { name: "Kemitraan", href: "/partner" };
+
 type NavbarTone = "light" | "dark";
+type NavbarUserRole = "superadmin" | "admin" | "user";
 type NavbarUser = {
   id: number;
   name: string;
   email: string;
-  role: string;
+  role: NavbarUserRole;
+  canApplyPartner: boolean;
+  hasPendingPartnerApplication: boolean;
 };
 
 function getLinkClass(
@@ -212,6 +217,9 @@ export default function Navbar() {
 
   const isDesktopDark = desktopTone === "dark";
   const desktopLogoClass = isDesktopDark ? "brightness-0" : "";
+  const navItems = user?.canApplyPartner
+    ? [...baseNavItems.slice(0, 3), partnerNavItem, baseNavItems[3]]
+    : baseNavItems;
   const accountHref = user ? "/profile" : "/login";
   const accountLabel = user ? user.name : "Login";
 

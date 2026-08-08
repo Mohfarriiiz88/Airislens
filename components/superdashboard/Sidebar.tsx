@@ -18,12 +18,12 @@ import { LogOut,ExternalLink  } from "lucide-react";
 
 const menu = [
   { label: "Dashboard", href: "/superadmin/dashboard", icon: LayoutDashboard },
-  { label: "Clients", href: "/superadmin/client", icon: Users },
-  { label: "Partners", href: "/superadmin/partners", icon: UserStar },
-  { label: "Partners App", href: "/superadmin/applications", icon: FileCheck },
-  { label: "Finance", href: "/superadmin/finance", icon: Wallet },
-  { label: "Gallery Control", href: "/superadmin/gallerycontrol", icon: Image },
-  { label: "Settings", href: "/superadmin/settings", icon: Settings },
+  { label: "Klien", href: "/superadmin/client", icon: Users },
+  { label: "Mitra", href: "/superadmin/partners", icon: UserStar },
+  { label: "Pengajuan Mitra", href: "/superadmin/applications", icon: FileCheck },
+  { label: "Keuangan", href: "/superadmin/finance", icon: Wallet },
+  { label: "Kontrol Galeri", href: "/superadmin/gallerycontrol", icon: Image },
+  { label: "Pengaturan", href: "/superadmin/settings", icon: Settings },
 ];
 
 export default function Sidebar() {
@@ -116,7 +116,7 @@ export default function Sidebar() {
       <ExternalLink size={20} strokeWidth={1.5} />
     </div>
 
-    {!collapsed && <span>Back to Website</span>}
+    {!collapsed && <span>Kembali ke Situs</span>}
   </Link>
 
   {/* ===== LOGOUT ===== */}
@@ -134,7 +134,7 @@ export default function Sidebar() {
       <LogOut size={20} strokeWidth={1.5} />
     </div>
 
-    {!collapsed && <span>Logout</span>}
+    {!collapsed && <span>Keluar</span>}
   </button>
 
 </div>

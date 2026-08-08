@@ -91,9 +91,9 @@ export default function SettingsPage() {
     <div className="space-y-8">
       {/* ===== HEADER ===== */}
       <div>
-        <h1 className="text-[40px] text-black">Settings</h1>
+        <h1 className="text-[40px] text-black">Pengaturan</h1>
         <p className="text-lg text-black">
-          Konfigurasi payment gateway Midtrans
+          Konfigurasi gateway pembayaran Midtrans
         </p>
       </div>
 
@@ -119,7 +119,7 @@ export default function SettingsPage() {
           {/* ===== STATUS INFO ===== */}
           <div className="text-sm text-black/70 space-y-1">
             <div>
-              Status server key:{' '}
+              Status kunci server:{' '}
               {summary?.hasServerKey ? (
                 <span className="font-medium text-green-700">
                   Terisi ({summary.serverKeyPreview})
@@ -139,8 +139,8 @@ export default function SettingsPage() {
               <div className="mt-2 rounded-lg bg-yellow-50 border border-yellow-300 px-3 py-2 text-yellow-800">
                 Masih menggunakan nilai dari .env untuk{' '}
                 {[
-                  summary.usingEnvFallback.serverKey ? 'server key' : null,
-                  summary.usingEnvFallback.clientKey ? 'client key' : null,
+                  summary.usingEnvFallback.serverKey ? 'kunci server' : null,
+                  summary.usingEnvFallback.clientKey ? 'kunci klien' : null,
                 ]
                   .filter(Boolean)
                   .join(' & ')}
@@ -152,7 +152,7 @@ export default function SettingsPage() {
           {/* ===== SERVER KEY ===== */}
           <div className="space-y-2">
             <label className="block text-sm font-medium text-black">
-              Server Key
+              Kunci Server
             </label>
             <div className="flex gap-2">
               <input
@@ -175,7 +175,7 @@ export default function SettingsPage() {
               </button>
             </div>
             <p className="text-xs text-black/50">
-              Server key disimpan terenkripsi (AES-256-GCM) di database.
+              Kunci server disimpan terenkripsi (AES-256-GCM) di database.
               Kosongkan bila tidak ingin mengganti.
             </p>
           </div>
@@ -183,7 +183,7 @@ export default function SettingsPage() {
           {/* ===== CLIENT KEY ===== */}
           <div className="space-y-2">
             <label className="block text-sm font-medium text-black">
-              Client Key
+              Kunci Klien
             </label>
             <input
               type="text"
@@ -193,14 +193,14 @@ export default function SettingsPage() {
               className="w-full rounded-xl border border-black/20 px-4 py-2 text-sm"
             />
             <p className="text-xs text-black/50">
-              Client key di-embed di snap.js pada layout root. Nilai ini publik.
+              Kunci klien disisipkan ke snap.js pada layout root. Nilai ini publik.
             </p>
           </div>
 
           {/* ===== ENVIRONMENT ===== */}
           <div className="space-y-2">
             <label className="block text-sm font-medium text-black">
-              Environment
+              Lingkungan
             </label>
             <div className="flex gap-6">
               <label className="flex items-center gap-2 text-sm">
@@ -210,7 +210,7 @@ export default function SettingsPage() {
                   checked={!isProduction}
                   onChange={() => setIsProduction(false)}
                 />
-                Sandbox
+                Uji Coba
               </label>
               <label className="flex items-center gap-2 text-sm">
                 <input
@@ -219,7 +219,7 @@ export default function SettingsPage() {
                   checked={isProduction}
                   onChange={() => setIsProduction(true)}
                 />
-                Production
+                Produksi
               </label>
             </div>
             <p className="text-xs text-black/50">

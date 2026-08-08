@@ -39,7 +39,7 @@ export default function UserList() {
 
   return (
     <div className="rounded-2xl border border-black/20 bg-white p-5">
-      <div className="mb-4 text-18px font-medium">Client Terbaru</div>
+      <div className="mb-4 text-18px font-medium">Klien Terbaru</div>
 
       <div className="space-y-3">
         {users.map((user) => (
@@ -53,7 +53,7 @@ export default function UserList() {
             </div>
 
             <span className="rounded-full bg-zinc-200 px-3 py-1 text-xs font-medium text-zinc-700">
-              Client
+              Klien
             </span>
           </div>
         ))}

@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { verifyJwt } from "@/lib/auth/jwt";
 import { AUTH_COOKIE_NAME } from "@/lib/auth/session";
 import { findUserById } from "@/lib/auth/users";
+import { findPendingPartnerApplicationByUserId } from "@/lib/partner-applications";
 
 export async function GET() {
   try {
@@ -26,7 +27,6 @@ export async function GET() {
       );
     }
 
-    // 🔥 ambil user dari DB (INI FIX UTAMA)
     const user = await findUserById(Number(session.sub));
 
     if (!user) {
@@ -36,13 +36,22 @@ export async function GET() {
       );
     }
 
+    const hasPendingPartnerApplication =
+      user.role === "user"
+        ? Boolean(await findPendingPartnerApplicationByUserId(user.id))
+        : false;
+    const canApplyPartner =
+      user.role === "user" && !hasPendingPartnerApplication;
+
     return NextResponse.json({
       user: {
         id: user.id,
         name: user.name,
         email: user.email,
         role: user.role,
-        phone: user.phone || "", // 🔥 TAMBAH
+        phone: user.phone || "",
+        canApplyPartner,
+        hasPendingPartnerApplication,
       },
     });
   } catch (error) {

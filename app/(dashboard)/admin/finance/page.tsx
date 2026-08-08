@@ -135,7 +135,7 @@ function statusLabel(status: string) {
     unpaid: "Belum Dibayar",
     held: "Ditahan Escrow",
     ready_to_release: "Siap Dirilis",
-    released: "Masuk Wallet",
+    released: "Masuk Dompet",
     refunded: "Refund",
     partial_refunded: "Partial Refund",
     pending: "Menunggu",
@@ -211,16 +211,16 @@ export default function AdminFinancePage() {
       const result = (await response.json()) as { message?: string };
 
       if (!response.ok) {
-        throw new Error(result.message || "Gagal membuat withdrawal.");
+        throw new Error(result.message || "Gagal membuat permintaan pencairan.");
       }
 
       setForm(INITIAL_FORM);
-      setMessage(result.message || "Permintaan pencairan berhasil dibuat.");
+      setMessage(result.message || "Permintaan pencairan berhasil dikirim.");
       await loadOverview();
     } catch (error) {
       setIsError(true);
       setMessage(
-        error instanceof Error ? error.message : "Gagal membuat withdrawal."
+          error instanceof Error ? error.message : "Gagal membuat permintaan pencairan."
       );
     } finally {
       setSubmitting(false);
@@ -232,7 +232,7 @@ export default function AdminFinancePage() {
       <div>
         <h1 className="text-[40px] text-black">Keuangan</h1>
         <p className="text-lg text-black">
-          Pantau escrow, saldo wallet, dan ajukan pencairan saldo partner.
+          Pantau escrow, saldo dompet, dan ajukan pencairan saldo mitra.
         </p>
       </div>
 
@@ -260,11 +260,11 @@ export default function AdminFinancePage() {
               value={formatCurrency(overview.wallet.availableBalance)}
             />
             <StatCard
-              title="Saldo Ditahan Withdraw"
+              title="Saldo Ditahan untuk Pencairan"
               value={formatCurrency(overview.wallet.pendingWithdrawalBalance)}
             />
             <StatCard
-              title="Total Masuk Wallet"
+              title="Total Masuk Dompet"
               value={formatCurrency(overview.wallet.totalEarned)}
             />
             <StatCard
@@ -311,13 +311,13 @@ export default function AdminFinancePage() {
 
             <section className="rounded-[28px] border border-black/10 bg-white p-6">
               <p className="text-xs uppercase tracking-[0.18em] text-black/40">
-                Withdraw
+                Pencairan
               </p>
               <h2 className="mt-2 text-2xl text-black">Ajukan pencairan</h2>
 
               <form onSubmit={handleSubmit} className="mt-6 space-y-4">
                 <Field
-                  label="Nominal Withdrawal"
+                  label="Nominal Pencairan"
                   type="number"
                   min="1"
                   value={form.requestedAmount}
@@ -356,7 +356,7 @@ export default function AdminFinancePage() {
                   disabled={submitting}
                   className="w-full rounded-xl bg-black px-4 py-3 text-sm text-white transition hover:opacity-90 disabled:opacity-60"
                 >
-                  {submitting ? "Mengirim..." : "Ajukan Withdrawal"}
+                  {submitting ? "Mengirim..." : "Ajukan Pencairan"}
                 </button>
               </form>
             </section>
@@ -366,7 +366,7 @@ export default function AdminFinancePage() {
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-xs uppercase tracking-[0.18em] text-black/40">
-                  Withdrawal
+                Pencairan
                 </p>
                 <h2 className="mt-2 text-2xl text-black">Riwayat pencairan</h2>
               </div>
@@ -416,7 +416,7 @@ export default function AdminFinancePage() {
                   ) : (
                     <tr>
                       <td colSpan={6} className="py-8 text-center text-black/40">
-                        Belum ada withdrawal.
+                        Belum ada pencairan.
                       </td>
                     </tr>
                   )}
@@ -428,7 +428,7 @@ export default function AdminFinancePage() {
           <div className="grid grid-cols-1 gap-6 2xl:grid-cols-2">
             <section className="rounded-[28px] border border-black/10 bg-white p-6">
               <p className="text-xs uppercase tracking-[0.18em] text-black/40">
-                Settlement
+                Penyelesaian Dana
               </p>
               <h2 className="mt-2 text-2xl text-black">Booking terbaru</h2>
 
@@ -439,7 +439,7 @@ export default function AdminFinancePage() {
                       <th className="pb-3">Order</th>
                       <th className="pb-3">Customer</th>
                       <th className="pb-3">Jadwal</th>
-                      <th className="pb-3">Net Partner</th>
+                      <th className="pb-3">Pendapatan Bersih Mitra</th>
                       <th className="pb-3">Status</th>
                     </tr>
                   </thead>
@@ -476,7 +476,7 @@ export default function AdminFinancePage() {
                     ) : (
                       <tr>
                         <td colSpan={5} className="py-8 text-center text-black/40">
-                          Belum ada settlement.
+                          Belum ada data penyelesaian dana.
                         </td>
                       </tr>
                     )}
@@ -487,7 +487,7 @@ export default function AdminFinancePage() {
 
             <section className="rounded-[28px] border border-black/10 bg-white p-6">
               <p className="text-xs uppercase tracking-[0.18em] text-black/40">
-                Wallet Ledger
+                Riwayat Saldo
               </p>
               <h2 className="mt-2 text-2xl text-black">Mutasi saldo</h2>
 

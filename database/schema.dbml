@@ -149,6 +149,11 @@ Table partner_gallery_items {
   title varchar(100) [not null]
   category varchar(100) [not null]
   image_url varchar(255) [not null]
+  ownership_declared boolean [not null, default: false]
+  subject_consent_declared boolean [not null, default: false]
+  publication_consent_declared boolean [not null, default: false]
+  responsibility_accepted boolean [not null, default: false]
+  declaration_accepted_at datetime [null]
   created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
   updated_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
 
@@ -208,18 +213,45 @@ Table partner_schedules {
 
 Table partner_applications {
   id bigint [pk, increment, not null]
+  applicant_name varchar(100) [not null]
+  applicant_email varchar(191) [not null]
+  applicant_phone varchar(30) [not null]
+  partner_type partner_type [not null, default: 'individual']
   location varchar(100) [not null]
-  category varchar(100) [not null]
+  domicile_city varchar(100) [not null]
+  address text [null]
+  brand_name varchar(100) [not null, default: '']
+  category varchar(100) [not null, note: "Legacy summary of first specialization/service"]
+  specializations_json text [null, note: "JSON string array of services/specializations"]
   experience varchar(100) [not null]
+  instagram_url varchar(255) [not null, default: '']
   portfolio_link varchar(255) [not null]
   about_you text [not null]
+  maps_url varchar(255) [null]
+  website_url varchar(255) [null]
+  established_year smallint [null]
+  studio_phone varchar(30) [null]
+  declaration_items_json text [null, note: "JSON string array of accepted declaration statements"]
+  declaration_accepted boolean [not null, default: false]
+  declaration_accepted_at datetime [null]
+  terms_accepted boolean [not null, default: false]
+  terms_version varchar(20) [null]
+  terms_accepted_at datetime [null]
+  bank_name varchar(100) [not null, default: ""]
+  bank_account_number varchar(30) [not null, default: ""]
+  cv_file_url varchar(255) [not null, default: ""]
   status partner_application_status [not null, default: 'pending']
+  rejection_reason text [null]
+  reviewed_at datetime [null]
+  reviewed_by_user_id bigint [null]
   submitted_by_user_id bigint [not null]
   created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
   updated_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
 
   Indexes {
     status [name: "partner_applications_status_idx"]
+    partner_type [name: "partner_applications_partner_type_idx"]
+    reviewed_by_user_id [name: "partner_applications_reviewed_by_user_id_idx"]
     submitted_by_user_id [name: "partner_applications_user_id_idx"]
   }
 }
@@ -436,6 +468,7 @@ Ref: partner_packages.user_id > users.id
 Ref: partner_packages.category_id > partner_categories.id
 Ref: partner_schedules.user_id > users.id
 Ref: partner_applications.submitted_by_user_id > users.id
+Ref: partner_applications.reviewed_by_user_id > users.id
 Ref: bookings.photographer_user_id > users.id
 Ref: bookings.customer_user_id > users.id
 Ref: bookings.package_id > partner_packages.id

@@ -133,12 +133,12 @@ export default function ProfilePage() {
       ? "Mengunggah Foto..."
       : submitState === "saving"
         ? "Menyimpan Profil..."
-        : "Simpan Profile";
+        : "Simpan Profil";
   const submitStatusText =
     submitState === "uploading"
       ? "Mengunggah, mengubah ke WebP, dan mengompres foto..."
       : submitState === "saving"
-        ? "Menyimpan profil partner..."
+        ? "Menyimpan profil mitra..."
         : "";
 
   async function loadProfile() {
@@ -155,7 +155,7 @@ export default function ProfilePage() {
 
       if (!response.ok) {
         setIsError(true);
-        setMessage(data.message ?? "Gagal memuat profil partner.");
+        setMessage(data.message ?? "Gagal memuat profil mitra.");
         return;
       }
 
@@ -244,7 +244,7 @@ export default function ProfilePage() {
     };
 
     if (!response.ok || !data.url) {
-      throw new Error(data.message ?? "Gagal mengunggah photo profile.");
+      throw new Error(data.message ?? "Gagal mengunggah foto profil.");
     }
 
     return data.url;
@@ -293,7 +293,7 @@ export default function ProfilePage() {
 
       if (!response.ok) {
         setIsError(true);
-        setMessage(data.message ?? "Gagal menyimpan profil partner.");
+        setMessage(data.message ?? "Gagal menyimpan profil mitra.");
         return;
       }
 
@@ -303,7 +303,7 @@ export default function ProfilePage() {
       setPhotoFile(null);
       setPhotoPreviewUrl("");
       setIsError(false);
-      setMessage(data.message ?? "Profil partner berhasil disimpan.");
+      setMessage(data.message ?? "Profil mitra berhasil disimpan.");
     } catch (error) {
       setIsError(true);
       setMessage(
@@ -321,9 +321,9 @@ export default function ProfilePage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-[40px] text-black">Profile Settings</h1>
+        <h1 className="text-[40px] text-black">Pengaturan Profil</h1>
         <p className="text-lg text-black">
-          Lengkapi profil partner agar otomatis tampil di halaman FindFG.
+          Lengkapi profil mitra agar otomatis tampil di halaman FindFG.
         </p>
       </div>
 
@@ -342,7 +342,7 @@ export default function ProfilePage() {
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="space-y-6 rounded-[28px] border border-black/10 bg-white p-6">
           {isLoading ? (
-            <div className="py-20 text-center text-black/40">Memuat profil partner...</div>
+            <div className="py-20 text-center text-black/40">Memuat profil mitra...</div>
           ) : (
             <>
               <div>
@@ -452,7 +452,7 @@ export default function ProfilePage() {
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <label className="text-sm text-black">Tipe Partner</label>
+                  <label className="text-sm text-black">Tipe Mitra</label>
                   <div className="mt-2 grid gap-3 grid-cols-2">
                     <button
                       type="button"
@@ -492,7 +492,7 @@ export default function ProfilePage() {
                   />
                   <p className="mt-2 text-xs text-black/50">
                     {form.partnerType === "individual"
-                      ? "Partner perorangan selalu memakai kuota 1 slot."
+                      ? "Mitra perorangan selalu memakai kuota 1 slot."
                       : "Jumlah maksimum booking aktif pada jam yang sama."}
                   </p>
                 </div>
@@ -563,7 +563,7 @@ export default function ProfilePage() {
             <div className="relative mb-4 h-[360px] overflow-hidden rounded-[24px] bg-[#f2f2f2]">
               <Image
                 src={previewImage}
-                alt={form.brandName || "Partner Photo"}
+                alt={form.brandName || "Foto Mitra"}
                 fill
                 unoptimized={shouldBypassImageOptimization(previewImage)}
                 className="object-cover"
@@ -571,7 +571,7 @@ export default function ProfilePage() {
             </div>
 
             <label className="block">
-              <span className="mb-2 block text-sm text-black">Photo Profile</span>
+              <span className="mb-2 block text-sm text-black">Foto Profil</span>
               <input
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
@@ -597,12 +597,12 @@ export default function ProfilePage() {
           </div>
 
           <div className="rounded-[28px] border border-black/10 bg-white p-5">
-            <p className="text-xs uppercase tracking-[0.18em] text-black/40">Preview</p>
+            <p className="text-xs uppercase tracking-[0.18em] text-black/40">Pratinjau</p>
             <h2 className="mt-3 text-2xl text-black">
-              {form.brandName || "Nama brand partner"}
+              {form.brandName || "Nama brand mitra"}
             </h2>
             <p className="mt-2 text-sm text-black/60">
-              {form.accountEmail || "email-partner@airislens.com"}
+              {form.accountEmail || "email-mitra@airislens.com"}
             </p>
 
             <div className="mt-5 flex flex-wrap gap-2">
@@ -624,7 +624,7 @@ export default function ProfilePage() {
 
             <div className="mt-6 space-y-4 text-sm text-black/70">
               <div>
-                <p className="text-black/40">Public URL</p>
+                <p className="text-black/40">URL Publik</p>
                 <p>{form.slug ? `/findfg/${form.slug}` : "Slug akan dibuat otomatis."}</p>
               </div>
               <div>
@@ -632,7 +632,7 @@ export default function ProfilePage() {
                 <p>{form.whatsapp || "Belum diisi"}</p>
               </div>
               <div>
-                <p className="text-black/40">Tipe Partner</p>
+                <p className="text-black/40">Tipe Mitra</p>
                 <p>{form.partnerType === "studio" ? "Studio" : "Perorangan"}</p>
               </div>
               <div>

@@ -257,10 +257,10 @@ export async function updateUserProfile(input: {
   name: string;
   email: string;
   phone: string;
-}) {
-  const pool = getDbPool();
+}, executor?: UserQueryExecutor) {
+  const queryExecutor = getUserQueryExecutor(executor);
 
-  await pool.execute(
+  await queryExecutor.execute(
     `
     UPDATE users
     SET name = ?, email = ?, phone = ?
@@ -272,10 +272,10 @@ export async function updateUserProfile(input: {
 export async function updateUserRole(input: {
   id: number;
   role: Exclude<UserRole, "superadmin">;
-}) {
-  const pool = getDbPool();
+}, executor?: UserQueryExecutor) {
+  const queryExecutor = getUserQueryExecutor(executor);
 
-  await pool.execute(
+  await queryExecutor.execute(
     `
       UPDATE users
       SET role = ?

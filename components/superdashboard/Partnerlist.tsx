@@ -39,7 +39,7 @@ export default function PartnerList() {
 
   return (
     <div className="rounded-2xl border border-black/20 bg-white p-5">
-      <div className="mb-4 text-18px font-medium">Partner (Fotografer)</div>
+      <div className="mb-4 text-18px font-medium">Mitra Fotografer</div>
 
       <div className="space-y-3">
         {partners.map((partner) => (
@@ -53,7 +53,7 @@ export default function PartnerList() {
             </div>
 
             <span className="rounded-full bg-blue-500/20 px-3 py-1 text-xs text-blue-600">
-              Partner
+              Mitra
             </span>
           </div>
         ))}

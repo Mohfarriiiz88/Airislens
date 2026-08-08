@@ -78,6 +78,13 @@ Gunakan hasil:
 - `openssl rand -base64 48` untuk `JWT_SECRET`
 - `openssl rand -base64 32` untuk `SETTINGS_ENCRYPTION_KEY`
 
+Jika memakai `UPLOAD_ROOT=/var/lib/airislens/uploads`, siapkan direktorinya dan beri hak akses ke user deploy:
+
+```bash
+sudo mkdir -p /var/lib/airislens/uploads
+sudo chown -R $USER:$USER /var/lib/airislens
+```
+
 ## 5. Import schema database
 
 Aplikasi ini sudah punya schema SQL penuh di repo:
@@ -94,15 +101,7 @@ npm ci
 npm run build
 ```
 
-Repo ini sekarang memakai `output: "standalone"`, jadi hasil build produksi utama ada di `.next/standalone`.
-
-Salin aset statis agar ikut dilayani oleh `server.js`:
-
-```bash
-cp -r public .next/standalone/
-mkdir -p .next/standalone/.next
-cp -r .next/static .next/standalone/.next/
-```
+Repo ini sekarang memakai `output: "standalone"`, dan `npm run build` akan otomatis menyalin `public` serta `.next/static` ke `.next/standalone`.
 
 ## 7. Seed superadmin
 
@@ -211,8 +210,5 @@ cd /var/www/airislens/current
 git pull
 npm ci
 npm run build
-cp -r public .next/standalone/
-mkdir -p .next/standalone/.next
-cp -r .next/static .next/standalone/.next/
 sudo systemctl restart airislens
 ```

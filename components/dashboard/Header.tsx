@@ -31,14 +31,14 @@ export default function Header() {
     <header className="h-16 border-b border-black/20 bg-[#ffffff] backdrop-blur flex items-center justify-between px-6">
       <div>
         <div className="mt-1 text-[24px] text-black">
-          Admin
+          Fotografer
         </div>
       </div>
 
       <div className="flex items-center gap-3">
         {/* 🔥 NAMA USER DINAMIS */}
         <div className="text-[18px] text-black">
-          {user?.name || "Loading..."}
+          {user?.name || "Memuat..."}
         </div>
 
         {/* 🔥 AVATAR */}

@@ -82,7 +82,7 @@ async function fetchFinanceOverview(filterStatus: FilterStatus) {
   };
 
   if (!response.ok || !result.overview) {
-    throw new Error(result.message || "Gagal memuat data finance.");
+    throw new Error(result.message || "Gagal memuat data keuangan.");
   }
 
   return result.overview;
@@ -179,7 +179,7 @@ export default function SuperadminFinancePage() {
     } catch (error) {
       setIsError(true);
       setMessage(
-        error instanceof Error ? error.message : "Gagal memuat data finance."
+        error instanceof Error ? error.message : "Gagal memuat data keuangan."
       );
     } finally {
       setLoading(false);
@@ -194,7 +194,7 @@ export default function SuperadminFinancePage() {
       } catch (error) {
         setIsError(true);
         setMessage(
-          error instanceof Error ? error.message : "Gagal memuat data finance."
+          error instanceof Error ? error.message : "Gagal memuat data keuangan."
         );
       } finally {
         setLoading(false);
@@ -265,17 +265,17 @@ export default function SuperadminFinancePage() {
       const result = (await response.json()) as { message?: string };
 
       if (!response.ok) {
-        throw new Error(result.message || "Gagal memperbarui refund request.");
+        throw new Error(result.message || "Gagal memperbarui permintaan refund.");
       }
 
-      setMessage(result.message || "Status refund request berhasil diperbarui.");
+      setMessage(result.message || "Status permintaan refund berhasil diperbarui.");
       await loadOverview(filter);
     } catch (error) {
       setIsError(true);
       setMessage(
         error instanceof Error
           ? error.message
-          : "Gagal memperbarui refund request."
+          : "Gagal memperbarui permintaan refund."
       );
     } finally {
       setActionLoadingId(null);
@@ -285,9 +285,9 @@ export default function SuperadminFinancePage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-[40px] text-black">Finance Control</h1>
+        <h1 className="text-[40px] text-black">Kontrol Keuangan</h1>
         <p className="text-lg text-black">
-          Verifikasi pencairan partner dan pantau saldo escrow AirisLens.
+          Verifikasi pencairan mitra dan pantau saldo escrow AirisLens.
         </p>
       </div>
 
@@ -305,21 +305,21 @@ export default function SuperadminFinancePage() {
 
       {loading || !overview ? (
         <div className="rounded-2xl border border-black/10 bg-white p-8 text-center text-black/50">
-          Memuat data finance...
+          Memuat data keuangan...
         </div>
       ) : (
         <>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
             <StatCard
-              title="Withdrawal Pending"
-              value={`${overview.summary.pendingWithdrawalCount} request`}
+              title="Pencairan Menunggu"
+              value={`${overview.summary.pendingWithdrawalCount} permintaan`}
             />
             <StatCard
               title="Dana Pending Cair"
               value={formatCurrency(overview.summary.pendingWithdrawalAmount)}
             />
             <StatCard
-              title="Saldo Wallet Partner"
+              title="Saldo Dompet Mitra"
               value={formatCurrency(overview.summary.totalPartnerAvailableBalance)}
             />
             <StatCard
@@ -330,7 +330,7 @@ export default function SuperadminFinancePage() {
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
             <MiniCard
-              label="Pendapatan Fee Platform"
+              label="Pendapatan Biaya Platform"
               value={formatCurrency(overview.summary.platformServiceFeeRevenue)}
             />
             <MiniCard
@@ -338,14 +338,14 @@ export default function SuperadminFinancePage() {
               value={formatCurrency(overview.summary.escrowHeldAmount)}
             />
             <MiniCard
-              label="Saldo Ditahan Withdraw"
+              label="Saldo Ditahan untuk Pencairan"
               value={formatCurrency(
                 overview.summary.totalPartnerPendingWithdrawalBalance
               )}
             />
             <MiniCard
-              label="Withdrawal Diproses"
-              value={`${overview.summary.processingWithdrawalCount} request`}
+              label="Pencairan Diproses"
+              value={`${overview.summary.processingWithdrawalCount} permintaan`}
             />
             <MiniCard
               label="Escrow Siap Rilis"
@@ -357,10 +357,10 @@ export default function SuperadminFinancePage() {
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <p className="text-xs uppercase tracking-[0.18em] text-black/40">
-                  Withdrawal Queue
+                  Antrian Pencairan
                 </p>
                 <h2 className="mt-2 text-2xl text-black">
-                  Antrian pencairan partner
+                  Antrian pencairan mitra
                 </h2>
               </div>
 
@@ -395,13 +395,13 @@ export default function SuperadminFinancePage() {
               <table className="w-full min-w-[1180px] text-left text-sm">
                 <thead className="text-black/50">
                   <tr>
-                    <th className="pb-3">Partner</th>
+                    <th className="pb-3">Mitra</th>
                     <th className="pb-3">Nominal</th>
                     <th className="pb-3">Rekening</th>
                     <th className="pb-3">Status</th>
                     <th className="pb-3">Waktu</th>
                     <th className="pb-3">Catatan Admin</th>
-                    <th className="pb-3">Ref Transfer</th>
+                    <th className="pb-3">Referensi Transfer</th>
                     <th className="pb-3">Aksi</th>
                   </tr>
                 </thead>
@@ -440,9 +440,9 @@ export default function SuperadminFinancePage() {
                             </span>
                           </td>
                           <td className="py-4 text-black/55">
-                            <div>Ajukan: {formatDate(item.requestedAt)}</div>
-                            <div>Review: {formatDate(item.reviewedAt)}</div>
-                            <div>Paid: {formatDate(item.paidAt)}</div>
+                            <div>Diajukan: {formatDate(item.requestedAt)}</div>
+                            <div>Ditinjau: {formatDate(item.reviewedAt)}</div>
+                            <div>Dibayar: {formatDate(item.paidAt)}</div>
                           </td>
                           <td className="py-4">
                             <textarea
@@ -484,7 +484,7 @@ export default function SuperadminFinancePage() {
                                   onClick={() => handleAction(item.id, "approve")}
                                   className="rounded-xl bg-black px-3 py-2 text-xs text-white disabled:opacity-60"
                                 >
-                                  Approve
+                                  Setujui
                                 </button>
                               ) : null}
 
@@ -496,7 +496,7 @@ export default function SuperadminFinancePage() {
                                   onClick={() => handleAction(item.id, "processing")}
                                   className="rounded-xl border border-black/15 px-3 py-2 text-xs text-black disabled:opacity-60"
                                 >
-                                  Processing
+                                  Proses
                                 </button>
                               )}
 
@@ -508,7 +508,7 @@ export default function SuperadminFinancePage() {
                                   onClick={() => handleAction(item.id, "paid")}
                                   className="rounded-xl bg-green-600 px-3 py-2 text-xs text-white disabled:opacity-60"
                                 >
-                                  Mark Paid
+                                  Tandai Dibayar
                                 </button>
                               )}
 
@@ -521,7 +521,7 @@ export default function SuperadminFinancePage() {
                                   onClick={() => handleAction(item.id, "reject")}
                                   className="rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700 disabled:opacity-60"
                                 >
-                                  Reject
+                                  Tolak
                                 </button>
                               ) : null}
                             </div>
@@ -532,7 +532,7 @@ export default function SuperadminFinancePage() {
                   ) : (
                     <tr>
                       <td colSpan={8} className="py-8 text-center text-black/40">
-                        Tidak ada request withdrawal untuk filter ini.
+                        Tidak ada permintaan pencairan untuk filter ini.
                       </td>
                     </tr>
                   )}
@@ -545,7 +545,7 @@ export default function SuperadminFinancePage() {
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-xs uppercase tracking-[0.18em] text-black/40">
-                  Refund Requests
+                  Permintaan Refund
                 </p>
                 <h2 className="mt-2 text-2xl text-black">
                   Permintaan refund booking
@@ -559,7 +559,7 @@ export default function SuperadminFinancePage() {
                   <tr>
                     <th className="pb-3">Booking</th>
                     <th className="pb-3">Customer</th>
-                    <th className="pb-3">Partner</th>
+                    <th className="pb-3">Mitra</th>
                     <th className="pb-3">Nominal</th>
                     <th className="pb-3">Alasan</th>
                     <th className="pb-3">Status</th>
@@ -629,7 +629,7 @@ export default function SuperadminFinancePage() {
                                     }
                                     className="rounded-xl bg-green-600 px-3 py-2 text-xs text-white disabled:opacity-60"
                                   >
-                                    Refund via Midtrans
+                                    Proses Refund via Midtrans
                                   </button>
                                   <button
                                     type="button"
@@ -647,12 +647,12 @@ export default function SuperadminFinancePage() {
                                     onClick={() => handleRefundAction(item.id, "reject")}
                                     className="rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700 disabled:opacity-60"
                                   >
-                                    Reject
+                                    Tolak
                                   </button>
                                 </>
                               ) : item.status === "reviewing" ? (
                                 <span className="text-xs text-black/45">
-                                  Refund sedang menunggu konfirmasi Midtrans.
+                                  Refund sedang menunggu konfirmasi dari Midtrans.
                                 </span>
                               ) : (
                                 <span className="text-xs text-black/45">
@@ -669,7 +669,7 @@ export default function SuperadminFinancePage() {
                   ) : (
                     <tr>
                       <td colSpan={8} className="py-8 text-center text-black/40">
-                        Tidak ada refund request.
+                        Tidak ada permintaan refund.
                       </td>
                     </tr>
                   )}
@@ -706,7 +706,7 @@ function refundStatusLabel(status: string) {
     open: "Menunggu",
     reviewing: "Menunggu Midtrans",
     resolved_refund: "Refund Disetujui",
-    resolved_partial_refund: "Partial Refund",
+    resolved_partial_refund: "Refund Parsial",
     resolved_release: "Dana Dirilis",
     rejected: "Ditolak",
   };

@@ -26,10 +26,10 @@ export default async function Page() {
 
       {/* ===== STATS ===== */}
       <div className="grid grid-cols-4 gap-4">
-        <StatCard title="Total User" value={formatNumber(snapshot.totalUsers)} />
-        <StatCard title="Total Partner" value={formatNumber(snapshot.totalPartners)} />
+        <StatCard title="Total Pengguna" value={formatNumber(snapshot.totalUsers)} />
+        <StatCard title="Total Mitra" value={formatNumber(snapshot.totalPartners)} />
         <StatCard title="Total Booking" value={formatNumber(snapshot.totalBookings)} />
-        <StatCard title="Revenue" value={formatCurrency(snapshot.totalRevenue)} />
+        <StatCard title="Pendapatan" value={formatCurrency(snapshot.totalRevenue)} />
       </div>
 
       {/* ===== ANALYTICS + PARTNER ===== */}

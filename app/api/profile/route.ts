@@ -1,6 +1,19 @@
 import { NextResponse } from "next/server";
+
 import { getServerSession } from "@/lib/auth/session";
 import { updateUserProfile } from "@/lib/auth/users";
+import {
+  getWhatsAppValidationServiceErrorMessage,
+  requireRegisteredWhatsAppNumber,
+} from "@/lib/whatsapp";
+
+export const runtime = "nodejs";
+
+type ProfileUpdateRequestBody = {
+  email?: string;
+  name?: string;
+  phone?: string;
+};
 
 export async function PATCH(request: Request) {
   try {
@@ -10,34 +23,58 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await request.json();
-
-    const { name, email, phone } = body;
+    const body = (await request.json()) as ProfileUpdateRequestBody;
+    const name = body.name?.trim() ?? "";
+    const email = body.email?.trim() ?? "";
+    const rawPhone = body.phone?.trim() ?? "";
 
     if (!name || !email) {
       return NextResponse.json(
-        { message: "Data tidak lengkap" },
+        { message: "Nama dan email wajib diisi." },
         { status: 400 }
       );
     }
 
-    // 🔥 ambil user id dari JWT
+    let normalizedPhone = "";
+
+    if (rawPhone) {
+      try {
+        normalizedPhone = await requireRegisteredWhatsAppNumber(rawPhone);
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Nomor WhatsApp tidak valid.";
+
+        return NextResponse.json(
+          { message },
+          {
+            status:
+              message === getWhatsAppValidationServiceErrorMessage()
+                ? 503
+                : 400,
+          }
+        );
+      }
+    }
+
     const userId = Number(session.sub);
 
     await updateUserProfile({
       id: userId,
       name,
       email,
-      phone,
+      phone: normalizedPhone,
     });
 
     return NextResponse.json({
-      message: "Profile berhasil diupdate",
+      message: "Profil berhasil diperbarui.",
+      phone: normalizedPhone,
     });
   } catch (error) {
-    console.error(error);
+    console.error("PATCH /api/profile ERROR:", error);
     return NextResponse.json(
-      { message: "Gagal update profile" },
+      { message: "Gagal memperbarui profil." },
       { status: 500 }
     );
   }

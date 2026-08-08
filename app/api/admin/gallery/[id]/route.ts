@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 
 import { requireSessionWithRole } from "@/lib/auth/access";
 import {
+  GALLERY_DECLARATION_ERROR_MESSAGE,
+  galleryDeclarationsAccepted,
+  normalizeGalleryDeclarationPayload,
+} from "@/lib/gallery-declarations";
+import {
   deletePartnerGalleryItem,
   getPartnerGalleryItemById,
   updatePartnerGalleryItem,
@@ -32,6 +37,10 @@ export async function PATCH(
       title?: string;
       category?: string;
       imageUrl?: string;
+      ownershipDeclared?: unknown;
+      subjectConsentDeclared?: unknown;
+      publicationConsentDeclared?: unknown;
+      responsibilityAccepted?: unknown;
     };
 
     if (!Number.isInteger(itemId) || itemId <= 0) {
@@ -60,6 +69,7 @@ export async function PATCH(
     const title = body.title?.trim() ?? "";
     const category = body.category?.trim() ?? "";
     const imageUrl = body.imageUrl?.trim() ?? "";
+    const declarations = normalizeGalleryDeclarationPayload(body);
 
     if (!title || !category || !imageUrl) {
       return NextResponse.json(
@@ -68,7 +78,16 @@ export async function PATCH(
       );
     }
 
-    if (imageUrl !== existingItem.imageUrl) {
+    const isReplacingImage = imageUrl !== existingItem.imageUrl;
+
+    if (isReplacingImage && !galleryDeclarationsAccepted(declarations)) {
+      return NextResponse.json(
+        { message: GALLERY_DECLARATION_ERROR_MESSAGE },
+        { status: 400 }
+      );
+    }
+
+    if (isReplacingImage) {
       await assertOwnedUploadUrl(imageUrl, {
         kind: "gallery",
         userId: authorized.userId,
@@ -79,6 +98,7 @@ export async function PATCH(
       title,
       category,
       imageUrl,
+      declarations: isReplacingImage ? declarations : undefined,
     });
 
     if (!updated) {
@@ -88,11 +108,14 @@ export async function PATCH(
       );
     }
 
-    if (imageUrl !== existingItem.imageUrl) {
+    if (isReplacingImage) {
       await deleteUploadedFileByUrl(existingItem.imageUrl);
     }
 
-    return NextResponse.json({ message: "Foto galeri berhasil diperbarui." });
+    return NextResponse.json({
+      message: "Foto galeri berhasil diperbarui.",
+      item: updated,
+    });
   } catch (error) {
     if (error instanceof UploadError) {
       return NextResponse.json(

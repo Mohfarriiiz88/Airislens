@@ -14,23 +14,23 @@ const INITIAL_DATA: GalleryControl[] = [
   {
     id: 'GL-001',
     image: 'https://source.unsplash.com/random/400x300?wedding',
-    title: 'Wedding Moment',
+    title: 'Momen Pernikahan',
     partner: 'Beranjak Photo',
-    category: 'Wedding',
+    category: 'Pernikahan',
   },
   {
     id: 'GL-002',
     image: 'https://source.unsplash.com/random/400x300?couple',
-    title: 'Couple Session',
+    title: 'Sesi Pasangan',
     partner: 'Lens Studio',
     category: 'Prewedding',
   },
   {
     id: 'GL-003',
     image: 'https://source.unsplash.com/random/400x300?graduation',
-    title: 'Graduation',
+    title: 'Wisuda',
     partner: 'Studio Lens',
-    category: 'Graduation',
+    category: 'Wisuda',
   },
 ]
 
@@ -49,7 +49,7 @@ export default function SuperadminGalleryPage() {
       {/* ===== HEADER ===== */}
       <div>
         <h1 className="text-[40px] text-black">
-          Gallery Management
+          Manajemen Galeri
         </h1>
         <p className="text-lg text-black">
           Kelola seluruh galeri fotografer

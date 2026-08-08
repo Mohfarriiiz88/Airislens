@@ -33,7 +33,7 @@ export default function PartnerPage() {
       if (!response.ok) {
         setPartners([]);
         setIsError(true);
-        setMessage(data.message ?? "Gagal memuat data partner.");
+        setMessage(data.message ?? "Gagal memuat data mitra.");
         return;
       }
 
@@ -72,13 +72,13 @@ export default function PartnerPage() {
 
       if (!response.ok) {
         setIsError(true);
-        setMessage(data.message ?? "Gagal menurunkan partner.");
+        setMessage(data.message ?? "Gagal menurunkan mitra.");
         return;
       }
 
       setPartners((prev) => prev.filter((item) => item.id !== partner.id));
       setIsError(false);
-      setMessage(data.message ?? "Partner berhasil diturunkan menjadi client.");
+      setMessage(data.message ?? "Mitra berhasil diturunkan menjadi klien.");
     } catch {
       setIsError(true);
       setMessage("Tidak dapat terhubung ke server.");
@@ -98,16 +98,16 @@ export default function PartnerPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-[40px] text-black">Partner Management</h1>
+        <h1 className="text-[40px] text-black">Manajemen Mitra</h1>
         <p className="text-lg text-black">
-          Akun dengan role admin ditampilkan di sini sebagai partner atau fotografer.
+          Akun dengan role admin ditampilkan di sini sebagai mitra fotografer.
         </p>
       </div>
 
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <input
           type="text"
-          placeholder="Cari nama atau email partner..."
+          placeholder="Cari nama atau email mitra..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-full rounded-xl border border-black/20 px-4 py-2 text-sm md:w-80"
@@ -117,7 +117,7 @@ export default function PartnerPage() {
           onClick={loadPartners}
           className="rounded-xl border border-black/20 bg-white px-4 py-2 text-sm text-black transition hover:bg-black hover:text-white"
         >
-          Refresh
+          Muat Ulang
         </button>
       </div>
 
@@ -141,7 +141,7 @@ export default function PartnerPage() {
               <th className="px-6 py-4 font-medium">Email</th>
               <th className="px-6 py-4 font-medium">Role</th>
               <th className="px-6 py-4 font-medium">Terdaftar</th>
-              <th className="px-6 py-4 font-medium">Action</th>
+              <th className="px-6 py-4 font-medium">Aksi</th>
             </tr>
           </thead>
 
@@ -149,13 +149,13 @@ export default function PartnerPage() {
             {isLoading ? (
               <tr>
                 <td colSpan={5} className="py-6 text-black/40">
-                  Memuat data partner...
+                  Memuat data mitra...
                 </td>
               </tr>
             ) : filteredPartners.length === 0 ? (
               <tr>
                 <td colSpan={5} className="py-6 text-black/40">
-                  Tidak ada partner.
+                  Tidak ada mitra.
                 </td>
               </tr>
             ) : (
@@ -168,7 +168,7 @@ export default function PartnerPage() {
                     <td className="px-6 py-4">{partner.email}</td>
                     <td className="px-6 py-4">
                       <span className="rounded-full bg-blue-500/20 px-3 py-1 text-xs text-blue-600">
-                        Partner
+                        Mitra
                       </span>
                     </td>
                     <td className="px-6 py-4">{formatDate(partner.createdAt)}</td>
@@ -178,7 +178,7 @@ export default function PartnerPage() {
                         disabled={isPending}
                         className="rounded-lg bg-yellow-500/20 px-3 py-1 text-xs text-yellow-700 transition hover:bg-yellow-500/30 disabled:opacity-60"
                       >
-                        {isPending ? "Memproses..." : "Turunkan ke Client"}
+                        {isPending ? "Memproses..." : "Turunkan ke Klien"}
                       </button>
                     </td>
                   </tr>

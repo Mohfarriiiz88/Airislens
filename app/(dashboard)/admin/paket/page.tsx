@@ -316,7 +316,7 @@ export default function AdminPaketPage() {
     <div className="space-y-8">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-[40px] font-normal text-black">Photo Package</h1>
+          <h1 className="text-[40px] font-normal text-black">Paket dan Kategori</h1>
           <p className="text-lg font-normal text-black">
             Kelola kategori layanan dan paket fotografi tanpa mencampur semua
             paket dalam satu daftar.

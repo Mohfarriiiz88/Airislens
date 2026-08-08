@@ -3,6 +3,7 @@ import "server-only";
 import { type ResultSetHeader, type RowDataPacket } from "mysql2/promise";
 
 import { getDbPool } from "@/lib/db";
+import { type GalleryDeclarationPayload } from "@/lib/gallery-declarations";
 
 const PROFILE_PHOTO_PLACEHOLDERS = [
   "/svg/fg1.svg",
@@ -42,6 +43,11 @@ type PartnerGalleryRow = RowDataPacket & {
   title: string;
   category: string;
   image_url: string;
+  ownership_declared: number | boolean;
+  subject_consent_declared: number | boolean;
+  publication_consent_declared: number | boolean;
+  responsibility_accepted: number | boolean;
+  declaration_accepted_at: Date | string | null;
 };
 
 type PartnerCategoryRow = RowDataPacket & {
@@ -98,8 +104,23 @@ export type PartnerGalleryItem = {
   imageUrl: string;
 };
 
-export type PartnerGalleryItemRecord = PartnerGalleryItem & {
+export type PartnerGalleryDeclarationAudit = GalleryDeclarationPayload & {
+  declarationAcceptedAt: string | null;
+};
+
+export type PartnerGalleryItemForOwner = PartnerGalleryItem &
+  PartnerGalleryDeclarationAudit;
+
+export type PartnerGalleryItemRecord = PartnerGalleryItemForOwner & {
   userId: number;
+};
+
+type PartnerGalleryCreateInput = Omit<PartnerGalleryItem, "id"> & {
+  declarations: GalleryDeclarationPayload;
+};
+
+type PartnerGalleryUpdateInput = Omit<PartnerGalleryItem, "id"> & {
+  declarations?: GalleryDeclarationPayload;
 };
 
 export type PartnerCategory = {
@@ -186,7 +207,7 @@ declare global {
   var __airislensPartnerCmsSchemaVersion: number | undefined;
 }
 
-const PARTNER_CMS_SCHEMA_VERSION = 3;
+const PARTNER_CMS_SCHEMA_VERSION = 4;
 
 function parseSpecializations(value: string) {
   try {
@@ -238,6 +259,50 @@ function normalizePackageRow(row: PartnerPackageRow): PartnerPackage {
     duration: row.duration,
     price: Number(row.price),
     description: row.description,
+  };
+}
+
+function toIsoString(value: Date | string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+}
+
+function normalizeGalleryFlag(value: number | boolean | null | undefined) {
+  return value === true || Number(value ?? 0) === 1;
+}
+
+function normalizeGalleryItemRow(row: PartnerGalleryRow): PartnerGalleryItem {
+  return {
+    id: Number(row.id),
+    title: row.title,
+    category: row.category,
+    imageUrl: row.image_url,
+  };
+}
+
+function normalizeGalleryDeclarationAudit(
+  row: PartnerGalleryRow
+): PartnerGalleryDeclarationAudit {
+  return {
+    ownershipDeclared: normalizeGalleryFlag(row.ownership_declared),
+    subjectConsentDeclared: normalizeGalleryFlag(row.subject_consent_declared),
+    publicationConsentDeclared: normalizeGalleryFlag(
+      row.publication_consent_declared
+    ),
+    responsibilityAccepted: normalizeGalleryFlag(row.responsibility_accepted),
+    declarationAcceptedAt: toIsoString(row.declaration_accepted_at),
+  };
+}
+
+function normalizeGalleryItemForOwner(
+  row: PartnerGalleryRow
+): PartnerGalleryItemForOwner {
+  return {
+    ...normalizeGalleryItemRow(row),
+    ...normalizeGalleryDeclarationAudit(row),
   };
 }
 
@@ -446,12 +511,65 @@ async function ensureSchemaInternal() {
       title VARCHAR(100) NOT NULL,
       category VARCHAR(100) NOT NULL,
       image_url VARCHAR(255) NOT NULL,
+      ownership_declared TINYINT(1) NOT NULL DEFAULT 0,
+      subject_consent_declared TINYINT(1) NOT NULL DEFAULT 0,
+      publication_consent_declared TINYINT(1) NOT NULL DEFAULT 0,
+      responsibility_accepted TINYINT(1) NOT NULL DEFAULT 0,
+      declaration_accepted_at DATETIME NULL,
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       PRIMARY KEY (id),
       KEY partner_gallery_items_user_id_idx (user_id)
     )
   `);
+
+  const partnerGalleryColumns = [
+    {
+      name: "ownership_declared",
+      definition: "TINYINT(1) NOT NULL DEFAULT 0 AFTER image_url",
+    },
+    {
+      name: "subject_consent_declared",
+      definition: "TINYINT(1) NOT NULL DEFAULT 0 AFTER ownership_declared",
+    },
+    {
+      name: "publication_consent_declared",
+      definition:
+        "TINYINT(1) NOT NULL DEFAULT 0 AFTER subject_consent_declared",
+    },
+    {
+      name: "responsibility_accepted",
+      definition:
+        "TINYINT(1) NOT NULL DEFAULT 0 AFTER publication_consent_declared",
+    },
+    {
+      name: "declaration_accepted_at",
+      definition: "DATETIME NULL AFTER responsibility_accepted",
+    },
+  ] as const;
+
+  for (const column of partnerGalleryColumns) {
+    const [rows] = await pool.execute<
+      (RowDataPacket & { COLUMN_NAME: string })[]
+    >(
+      `
+        SELECT COLUMN_NAME
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'partner_gallery_items'
+          AND COLUMN_NAME = ?
+        LIMIT 1
+      `,
+      [column.name]
+    );
+
+    if (rows.length === 0) {
+      await pool.execute(`
+        ALTER TABLE partner_gallery_items
+        ADD COLUMN ${column.name} ${column.definition}
+      `);
+    }
+  }
 
   await pool.execute(`
     CREATE TABLE IF NOT EXISTS partner_categories (
@@ -850,6 +968,31 @@ export async function getPartnerBookingProfile(userId: number) {
   } satisfies PartnerBookingProfile;
 }
 
+async function findPartnerGalleryRowById(itemId: number) {
+  const pool = getDbPool();
+  const [rows] = await pool.execute<PartnerGalleryRow[]>(
+    `
+      SELECT
+        id,
+        user_id,
+        title,
+        category,
+        image_url,
+        ownership_declared,
+        subject_consent_declared,
+        publication_consent_declared,
+        responsibility_accepted,
+        declaration_accepted_at
+      FROM partner_gallery_items
+      WHERE id = ?
+      LIMIT 1
+    `,
+    [itemId]
+  );
+
+  return rows[0] ?? null;
+}
+
 export async function listPartnerGalleryItems(userId: number) {
   await ensurePartnerCmsSchema();
 
@@ -864,84 +1007,153 @@ export async function listPartnerGalleryItems(userId: number) {
     [userId]
   );
 
-  return rows.map((item) => ({
-    id: item.id,
-    title: item.title,
-    category: item.category,
-    imageUrl: item.image_url,
-  }));
+  return rows.map(normalizeGalleryItemRow);
 }
 
-export async function getPartnerGalleryItemById(itemId: number) {
+export async function listPartnerGalleryItemsForOwner(userId: number) {
   await ensurePartnerCmsSchema();
 
   const pool = getDbPool();
   const [rows] = await pool.execute<PartnerGalleryRow[]>(
     `
-      SELECT id, user_id, title, category, image_url
+      SELECT
+        id,
+        user_id,
+        title,
+        category,
+        image_url,
+        ownership_declared,
+        subject_consent_declared,
+        publication_consent_declared,
+        responsibility_accepted,
+        declaration_accepted_at
       FROM partner_gallery_items
-      WHERE id = ?
-      LIMIT 1
+      WHERE user_id = ?
+      ORDER BY id DESC
     `,
-    [itemId]
+    [userId]
   );
 
-  const row = rows[0];
+  return rows.map(normalizeGalleryItemForOwner);
+}
+
+export async function getPartnerGalleryItemById(itemId: number) {
+  await ensurePartnerCmsSchema();
+
+  const row = await findPartnerGalleryRowById(itemId);
 
   if (!row) {
     return null;
   }
 
   return {
-    id: row.id,
+    ...normalizeGalleryItemForOwner(row),
     userId: row.user_id,
-    title: row.title,
-    category: row.category,
-    imageUrl: row.image_url,
   } satisfies PartnerGalleryItemRecord;
 }
 
 export async function createPartnerGalleryItem(
   userId: number,
-  input: Omit<PartnerGalleryItem, "id">
+  input: PartnerGalleryCreateInput
 ) {
   await ensurePartnerCmsSchema();
 
   const pool = getDbPool();
   const [result] = await pool.execute<ResultSetHeader>(
     `
-      INSERT INTO partner_gallery_items (user_id, title, category, image_url)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO partner_gallery_items (
+        user_id,
+        title,
+        category,
+        image_url,
+        ownership_declared,
+        subject_consent_declared,
+        publication_consent_declared,
+        responsibility_accepted,
+        declaration_accepted_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
     `,
-    [userId, input.title, input.category, input.imageUrl]
+    [
+      userId,
+      input.title,
+      input.category,
+      input.imageUrl,
+      input.declarations.ownershipDeclared ? 1 : 0,
+      input.declarations.subjectConsentDeclared ? 1 : 0,
+      input.declarations.publicationConsentDeclared ? 1 : 0,
+      input.declarations.responsibilityAccepted ? 1 : 0,
+    ]
   );
 
-  return {
-    id: Number(result.insertId),
-    ...input,
-  };
+  const row = await findPartnerGalleryRowById(Number(result.insertId));
+
+  if (!row) {
+    throw new Error("Foto galeri berhasil dibuat tetapi gagal dimuat ulang.");
+  }
+
+  return normalizeGalleryItemForOwner(row);
 }
 
 export async function updatePartnerGalleryItem(
   userId: number,
   itemId: number,
-  input: Omit<PartnerGalleryItem, "id">
+  input: PartnerGalleryUpdateInput
 ) {
   await ensurePartnerCmsSchema();
 
   const pool = getDbPool();
-  const [result] = await pool.execute<ResultSetHeader>(
-    `
-      UPDATE partner_gallery_items
-      SET title = ?, category = ?, image_url = ?
-      WHERE id = ?
-        AND user_id = ?
-      LIMIT 1
-    `,
-    [input.title, input.category, input.imageUrl, itemId, userId]
-  );
+  const [result] = input.declarations
+    ? await pool.execute<ResultSetHeader>(
+        `
+          UPDATE partner_gallery_items
+          SET
+            title = ?,
+            category = ?,
+            image_url = ?,
+            ownership_declared = ?,
+            subject_consent_declared = ?,
+            publication_consent_declared = ?,
+            responsibility_accepted = ?,
+            declaration_accepted_at = NOW()
+          WHERE id = ?
+            AND user_id = ?
+          LIMIT 1
+        `,
+        [
+          input.title,
+          input.category,
+          input.imageUrl,
+          input.declarations.ownershipDeclared ? 1 : 0,
+          input.declarations.subjectConsentDeclared ? 1 : 0,
+          input.declarations.publicationConsentDeclared ? 1 : 0,
+          input.declarations.responsibilityAccepted ? 1 : 0,
+          itemId,
+          userId,
+        ]
+      )
+    : await pool.execute<ResultSetHeader>(
+        `
+          UPDATE partner_gallery_items
+          SET title = ?, category = ?, image_url = ?
+          WHERE id = ?
+            AND user_id = ?
+          LIMIT 1
+        `,
+        [input.title, input.category, input.imageUrl, itemId, userId]
+      );
 
-  return result.affectedRows > 0;
+  if (result.affectedRows === 0) {
+    return null;
+  }
+
+  const row = await findPartnerGalleryRowById(itemId);
+
+  if (!row) {
+    throw new Error("Foto galeri berhasil diperbarui tetapi gagal dimuat ulang.");
+  }
+
+  return normalizeGalleryItemForOwner(row);
 }
 
 export async function deletePartnerGalleryItem(userId: number, itemId: number) {

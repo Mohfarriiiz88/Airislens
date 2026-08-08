@@ -59,6 +59,10 @@ export function getFonnteConfig() {
   };
 }
 
+export function getFonnteToken() {
+  return getRequiredTrimmedEnv("FONNTE_TOKEN");
+}
+
 export function getOptionalSuperadminEmail() {
   return process.env.SUPERADMIN_EMAIL?.trim().toLowerCase() || null;
 }

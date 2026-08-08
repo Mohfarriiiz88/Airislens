@@ -1,20 +1,28 @@
 import { NextResponse } from "next/server";
 
 import { requireSessionWithRole } from "@/lib/auth/access";
+import {
+  GALLERY_DECLARATION_ERROR_MESSAGE,
+  galleryDeclarationsAccepted,
+  normalizeGalleryDeclarationPayload,
+} from "@/lib/gallery-declarations";
 import { assertOwnedUploadUrl, UploadError } from "@/lib/uploads";
 import {
   createPartnerGalleryItem,
-  listPartnerGalleryItems,
+  listPartnerGalleryItemsForOwner,
 } from "@/lib/partner-cms";
 
 export async function GET() {
   const authorized = await requireSessionWithRole(["admin"]);
 
   if (!authorized) {
-    return NextResponse.json({ message: "Unauthorized." }, { status: 401 });
+    return NextResponse.json(
+      { message: "Anda harus login sebagai admin." },
+      { status: 401 }
+    );
   }
 
-  const items = await listPartnerGalleryItems(authorized.userId);
+  const items = await listPartnerGalleryItemsForOwner(authorized.userId);
 
   return NextResponse.json({ items });
 }
@@ -34,15 +42,27 @@ export async function POST(request: Request) {
       title?: string;
       category?: string;
       imageUrl?: string;
+      ownershipDeclared?: unknown;
+      subjectConsentDeclared?: unknown;
+      publicationConsentDeclared?: unknown;
+      responsibilityAccepted?: unknown;
     };
 
     const title = body.title?.trim() ?? "";
     const category = body.category?.trim() ?? "";
     const imageUrl = body.imageUrl?.trim() ?? "";
+    const declarations = normalizeGalleryDeclarationPayload(body);
 
     if (!title || !category || !imageUrl) {
       return NextResponse.json(
         { message: "Judul, kategori, dan gambar wajib diisi." },
+        { status: 400 }
+      );
+    }
+
+    if (!galleryDeclarationsAccepted(declarations)) {
+      return NextResponse.json(
+        { message: GALLERY_DECLARATION_ERROR_MESSAGE },
         { status: 400 }
       );
     }
@@ -56,6 +76,7 @@ export async function POST(request: Request) {
       title,
       category,
       imageUrl,
+      declarations,
     });
 
     return NextResponse.json({

@@ -1,398 +1,757 @@
-'use client'
+"use client";
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from "react";
+
+import {
+  getPartnerTypeLabel,
+  type PartnerApplicationKind,
+  type PartnerApplicationStatus,
+} from "@/lib/partner-application-shared";
 
 type Application = {
-  id: number
-  name: string
-  email: string
-  phone: string
-  location: string
-  category: string
-  experience: string
-  portfolioLink: string
-  aboutYou: string
-  status: 'pending' | 'approved' | 'rejected'
-  createdAt: string
-}
+  id: number;
+  applicantName: string;
+  applicantEmail: string;
+  applicantPhone: string;
+  partnerType: PartnerApplicationKind;
+  domicileCity: string;
+  address: string;
+  brandName: string;
+  services: string[];
+  experience: string;
+  instagramUrl: string;
+  portfolioUrl: string;
+  about: string;
+  mapsUrl: string | null;
+  websiteUrl: string | null;
+  establishedYear: number | null;
+  studioPhone: string;
+  declarationAccepted: boolean;
+  declarations: string[];
+  declarationAcceptedAt: string | null;
+  termsAccepted: boolean;
+  termsVersion: string | null;
+  termsAcceptedAt: string | null;
+  bankName: string;
+  bankAccountNumber: string;
+  cvFileUrl: string;
+  status: PartnerApplicationStatus;
+  rejectionReason: string | null;
+  reviewedAt: string | null;
+  reviewedByUserId: number | null;
+  reviewedByName: string | null;
+  createdAt: string;
+};
 
 export default function ApplicationsPage() {
-  const [data, setData] = useState<Application[]>([])
-  const [search, setSearch] = useState('')
-  const [selected, setSelected] = useState<Application | null>(null)
-  const [openMenu, setOpenMenu] = useState<number | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [actionLoading, setActionLoading] = useState<number | null>(null)
+  const [applications, setApplications] = useState<Application[]>([]);
+  const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState<Application | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
+  const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
+  const [rejecting, setRejecting] = useState<Application | null>(null);
+  const [rejectionReason, setRejectionReason] = useState("");
 
-  // 🔥 ref untuk dropdown
-  const menuRef = useRef<HTMLDivElement | null>(null)
-
-  // Fetch data on mount
   useEffect(() => {
-    fetchApplications()
-  }, [])
-
-  // 🔥 click outside FIX
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setOpenMenu(null)
-      }
-    }
-
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [])
+    void fetchApplications();
+  }, []);
 
   async function fetchApplications() {
     try {
-      setLoading(true)
-      setError(null)
-      const response = await fetch('/api/partner-applications')
+      setLoading(true);
+      setError(null);
+      const response = await fetch("/api/partner-applications", {
+        cache: "no-store",
+      });
+      const result = (await response.json()) as {
+        message?: string;
+        applications?: Application[];
+      };
 
       if (!response.ok) {
-        throw new Error('Gagal mengambil data pengajuan')
+        throw new Error(result.message || "Gagal mengambil data pengajuan.");
       }
 
-      const result = await response.json()
-      const applications = result.applications.map((app: {
-        id: number
-        name: string
-        email: string
-        phone: string
-        location: string
-        category: string
-        experience: string
-        portfolioLink: string
-        aboutYou: string
-        status: 'pending' | 'approved' | 'rejected'
-        createdAt: string | Date
-      }) => ({
-        id: app.id,
-        name: app.name,
-        email: app.email,
-        phone: app.phone,
-        location: app.location,
-        category: app.category,
-        experience: app.experience,
-        portfolioLink: app.portfolioLink,
-        aboutYou: app.aboutYou,
-        status: app.status,
-        createdAt: new Date(app.createdAt).toLocaleDateString('id-ID'),
-      }))
-
-      setData(applications)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Terjadi kesalahan')
+      setApplications(result.applications ?? []);
+    } catch (fetchError) {
+      setError(
+        fetchError instanceof Error
+          ? fetchError.message
+          : "Terjadi kesalahan saat memuat pengajuan."
+      );
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
-  const filtered = data.filter((item) =>
-    item.name.toLowerCase().includes(search.toLowerCase())
-  )
+  const query = search.trim().toLowerCase();
+  const filteredApplications = !query
+    ? applications
+    : applications.filter((item) => {
+        const serviceText = item.services.join(" ").toLowerCase();
+        return (
+          item.applicantName.toLowerCase().includes(query) ||
+          item.applicantEmail.toLowerCase().includes(query) ||
+          item.domicileCity.toLowerCase().includes(query) ||
+          item.brandName.toLowerCase().includes(query) ||
+          serviceText.includes(query)
+        );
+      });
 
-  async function handleApprove(id: number) {
+  function applyReviewedApplication(application: Application) {
+    setApplications((prev) =>
+      prev.map((item) => (item.id === application.id ? application : item))
+    );
+    setSelected((prev) => (prev?.id === application.id ? application : prev));
+  }
+
+  async function handleApprove(application: Application) {
     try {
-      setActionLoading(id)
-      const response = await fetch(`/api/superadmin/partner-applications/${id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          status: 'approved',
-        }),
-      })
+      setActionLoadingId(application.id);
+      setMessage(null);
 
-      if (!response.ok) {
-        const result = await response.json()
-        throw new Error(result.message || 'Gagal menerima pengajuan')
+      const response = await fetch(
+        `/api/superadmin/partner-applications/${application.id}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ status: "approved" }),
+        }
+      );
+      const result = (await response.json()) as {
+        message?: string;
+        application?: Application;
+      };
+
+      if (!response.ok || !result.application) {
+        throw new Error(result.message || "Gagal menyetujui pengajuan.");
       }
 
-      // Update local state
-      setData((prev) =>
-        prev.map((item) =>
-          item.id === id ? { ...item, status: 'approved' } : item
-        )
-      )
-
-      setOpenMenu(null)
-      alert('Pengajuan berhasil diterima')
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Terjadi kesalahan')
+      applyReviewedApplication(result.application);
+      setMessage({
+        type: "success",
+        text: result.message || "Pengajuan berhasil disetujui.",
+      });
+    } catch (approveError) {
+      setMessage({
+        type: "error",
+        text:
+          approveError instanceof Error
+            ? approveError.message
+            : "Terjadi kesalahan saat menyetujui pengajuan.",
+      });
     } finally {
-      setActionLoading(null)
+      setActionLoadingId(null);
     }
   }
 
-  async function handleReject(id: number) {
-    try {
-      setActionLoading(id)
-      const response = await fetch(`/api/superadmin/partner-applications/${id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          status: 'rejected',
-        }),
-      })
+  async function handleReject() {
+    if (!rejecting) {
+      return;
+    }
 
-      if (!response.ok) {
-        const result = await response.json()
-        throw new Error(result.message || 'Gagal menolak pengajuan')
+    try {
+      setActionLoadingId(rejecting.id);
+      setMessage(null);
+
+      const response = await fetch(
+        `/api/superadmin/partner-applications/${rejecting.id}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            status: "rejected",
+            rejectionReason,
+          }),
+        }
+      );
+      const result = (await response.json()) as {
+        message?: string;
+        application?: Application;
+      };
+
+      if (!response.ok || !result.application) {
+        throw new Error(result.message || "Gagal menolak pengajuan.");
       }
 
-      // Update local state
-      setData((prev) =>
-        prev.map((item) =>
-          item.id === id ? { ...item, status: 'rejected' } : item
-        )
-      )
-
-      setOpenMenu(null)
-      alert('Pengajuan berhasil ditolak')
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Terjadi kesalahan')
+      applyReviewedApplication(result.application);
+      setRejecting(null);
+      setRejectionReason("");
+      setMessage({
+        type: "success",
+        text: result.message || "Pengajuan berhasil ditolak.",
+      });
+    } catch (rejectError) {
+      setMessage({
+        type: "error",
+        text:
+          rejectError instanceof Error
+            ? rejectError.message
+            : "Terjadi kesalahan saat menolak pengajuan.",
+      });
     } finally {
-      setActionLoading(null)
+      setActionLoadingId(null);
     }
   }
 
   return (
     <div className="space-y-8">
-
-      {/* ===== HEADER ===== */}
       <div>
-        <h1 className="text-[40px] text-black">
-          Partner Applications
-        </h1>
+        <h1 className="text-[40px] text-black">Pengajuan Mitra</h1>
         <p className="text-lg text-black">
-          Kelola pengajuan mitra fotografer
+          Tinjau verifikasi mitra secara manual sebelum memberikan akses
+          fotografer.
         </p>
       </div>
 
-      {/* ===== ERROR ===== */}
-      {error && (
-        <div className="bg-red-100 border border-red-300 text-red-700 px-4 py-3 rounded-lg">
+      {message ? (
+        <div
+          className={`rounded-2xl border px-4 py-3 text-sm ${
+            message.type === "success"
+              ? "border-green-500/20 bg-green-500/10 text-green-700"
+              : "border-red-500/20 bg-red-500/10 text-red-700"
+          }`}
+        >
+          {message.text}
+        </div>
+      ) : null}
+
+      {error ? (
+        <div className="rounded-2xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
         </div>
-      )}
+      ) : null}
 
-      {/* ===== LOADING ===== */}
-      {loading ? (
-        <div className="text-center py-8 text-black/50">
-          Memuat data...
-        </div>
-      ) : (
-        <>
-          {/* ===== SEARCH ===== */}
-          <input
-            type="text"
-            placeholder="Cari nama..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full md:w-72 rounded-xl border border-black/20 px-4 py-2 text-sm"
-          />
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <input
+          type="text"
+          placeholder="Cari nama, email, domisili, brand, atau layanan..."
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          className="w-full rounded-xl border border-black/20 bg-white px-4 py-3 text-sm text-black outline-none md:w-[440px]"
+        />
+        <button
+          type="button"
+          onClick={() => void fetchApplications()}
+          className="rounded-xl border border-black/20 bg-white px-4 py-3 text-sm text-black transition hover:bg-black hover:text-white"
+        >
+          Muat Ulang
+        </button>
+      </div>
 
-          {/* ===== TABLE ===== */}
-          <div className="rounded-2xl border border-black/20 bg-white">
-            <table className="w-full text-sm text-center">
-              <thead>
-                <tr>
-                  <th className="text-left px-6 py-4">Nama</th>
-                  <th className="px-6 py-4">Lokasi</th>
-                  <th className="px-6 py-4">Kategori</th>
-                  <th className="px-6 py-4">Tanggal</th>
-                  <th className="px-6 py-4">Status</th>
-                  <th className="px-6 py-4">Action</th>
-                </tr>
-              </thead>
+      <div className="overflow-hidden rounded-[28px] border border-black/10 bg-white">
+        <table className="w-full text-left text-sm text-black">
+          <thead className="bg-black/[0.02] text-black/55">
+            <tr>
+              <th className="px-6 py-4 font-medium">Pendaftar</th>
+              <th className="px-6 py-4 font-medium">Jenis Mitra</th>
+              <th className="px-6 py-4 font-medium">Layanan</th>
+              <th className="px-6 py-4 font-medium">Tanggal Pengajuan</th>
+              <th className="px-6 py-4 font-medium">Status</th>
+              <th className="px-6 py-4 font-medium">Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr>
+                <td colSpan={6} className="px-6 py-10 text-center text-black/40">
+                  Memuat data pengajuan...
+                </td>
+              </tr>
+            ) : filteredApplications.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-6 py-10 text-center text-black/40">
+                  Tidak ada pengajuan yang cocok.
+                </td>
+              </tr>
+            ) : (
+              filteredApplications.map((application) => {
+                const isBusy = actionLoadingId === application.id;
 
-              <tbody>
-                {filtered.map((item) => (
-                  <tr key={item.id} className="border-t border-black/20">
-                    
-                    <td className="text-left px-6 py-4">
-                      <div>
-                        <div className="font-medium">{item.name}</div>
-                        <div className="text-xs text-black/50">
-                          {item.email}
-                        </div>
+                return (
+                  <tr
+                    key={application.id}
+                    className="border-t border-black/10 align-top transition hover:bg-black/[0.02]"
+                  >
+                    <td className="px-6 py-4">
+                      <div className="font-medium text-black">
+                        {application.applicantName}
+                      </div>
+                      <div className="mt-1 text-black/55">
+                        {application.applicantEmail}
+                      </div>
+                      <div className="mt-1 text-xs text-black/40">
+                        {application.applicantPhone}
                       </div>
                     </td>
-
-                    <td>{item.location}</td>
-                    <td>{item.category}</td>
-                    <td>{item.createdAt}</td>
-
-                    <td>
-                      <StatusBadge status={item.status} />
+                    <td className="px-6 py-4">
+                      <div className="font-medium text-black">
+                        {getPartnerTypeLabel(application.partnerType)}
+                      </div>
+                      <div className="mt-1 text-xs text-black/45">
+                        {application.brandName || "-"}
+                      </div>
                     </td>
-
-                    {/* ===== DROPDOWN ===== */}
-                    <td className="relative">
-                      <div ref={menuRef}>
-
+                    <td className="px-6 py-4 text-black/70">
+                      {application.services.length > 0
+                        ? application.services.join(", ")
+                        : "-"}
+                    </td>
+                    <td className="px-6 py-4 text-black/70">
+                      {formatDate(application.createdAt)}
+                    </td>
+                    <td className="px-6 py-4">
+                      <StatusBadge status={application.status} />
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-wrap gap-2">
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setOpenMenu(openMenu === item.id ? null : item.id)
-                          }}
-                          className="px-2 py-1 rounded-lg hover:bg-black/10"
+                          type="button"
+                          onClick={() => setSelected(application)}
+                          className="rounded-xl border border-black/15 px-3 py-2 text-xs text-black transition hover:bg-black hover:text-white"
                         >
-                          ⋮
+                          Detail
                         </button>
-
-                        {openMenu === item.id && (
-                          <div className="absolute right-0 mt-2 w-36 bg-white border border-black/20 rounded-xl shadow-lg z-20">
-
-                            {/* DETAIL */}
+                        {application.status === "pending" ? (
+                          <>
                             <button
-                              onClick={() => {
-                                setSelected(item)
-                                setOpenMenu(null)
-                              }}
-                              className="w-full text-left px-3 py-2 text-sm hover:bg-black/5"
+                              type="button"
+                              disabled={isBusy}
+                              onClick={() => void handleApprove(application)}
+                              className="rounded-xl bg-black px-3 py-2 text-xs text-white disabled:opacity-60"
                             >
-                              Detail
+                              {isBusy ? "Memproses..." : "Approve"}
                             </button>
-
-                            {/* APPROVE */}
-                            {item.status === 'pending' && (
-                              <button
-                                onClick={() => handleApprove(item.id)}
-                                disabled={actionLoading === item.id}
-                                className="w-full text-left px-3 py-2 text-sm text-green-600 hover:bg-green-50 disabled:opacity-50"
-                              >
-                                {actionLoading === item.id ? '...' : 'Approve'}
-                              </button>
-                            )}
-
-                            {/* REJECT */}
-                            {item.status === 'pending' && (
-                              <button
-                                onClick={() => handleReject(item.id)}
-                                disabled={actionLoading === item.id}
-                                className="w-full text-left px-3 py-2 text-sm text-red-500 hover:bg-red-50 disabled:opacity-50"
-                              >
-                                {actionLoading === item.id ? '...' : 'Reject'}
-                              </button>
-                            )}
-
-                          </div>
-                        )}
-                  </div>
-                </td>
-
-              </tr>
-            ))}
-
-            {filtered.length === 0 && (
-              <tr>
-                <td colSpan={6} className="py-6 text-black/40">
-                  Tidak ada data
-                </td>
-              </tr>
+                            <button
+                              type="button"
+                              disabled={isBusy}
+                              onClick={() => {
+                                setRejecting(application);
+                                setRejectionReason("");
+                              }}
+                              className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 disabled:opacity-60"
+                            >
+                              Reject
+                            </button>
+                          </>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
       </div>
 
-      {/* ===== MODAL DETAIL ===== */}
-      {selected && (
-        <div
-          onClick={() => setSelected(null)}
-          className="fixed inset-0 bg-black/30 flex items-center justify-center z-50"
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-2xl p-6 w-[400px] space-y-4 max-h-[90vh] overflow-y-auto"
-          >
-            <h2 className="text-lg font-medium">
-              Detail Pengajuan
-            </h2>
+      {selected ? (
+        <ApplicationDetailModal
+          application={selected}
+          onClose={() => setSelected(null)}
+          onApprove={() => void handleApprove(selected)}
+          onReject={() => {
+            setRejecting(selected);
+            setRejectionReason("");
+          }}
+          actionLoading={actionLoadingId === selected.id}
+        />
+      ) : null}
 
-            <div className="text-sm space-y-3">
-              <div>
-                <b>Nama:</b> {selected.name}
-              </div>
-              <div>
-                <b>Email:</b> {selected.email}
-              </div>
-              <div>
-                <b>Phone:</b> {selected.phone}
-              </div>
-              <div>
-                <b>Lokasi:</b> {selected.location}
-              </div>
-              <div>
-                <b>Kategori:</b> {selected.category}
-              </div>
-              <div>
-                <b>Pengalaman:</b> {selected.experience}
-              </div>
-              <div>
-                <b>Portfolio:</b>{' '}
-                <a
-                  href={selected.portfolioLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 underline"
-                >
-                  {selected.portfolioLink}
-                </a>
-              </div>
-              <div>
-                <b>Tentang:</b>
-                <p className="text-xs mt-1">{selected.aboutYou}</p>
-              </div>
-            </div>
-
-            <div className="flex justify-end">
-              <button
-                onClick={() => setSelected(null)}
-                className="px-3 py-1 text-sm bg-black/10 rounded-lg"
-              >
-                Tutup
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-        </>
-      )}
+      {rejecting ? (
+        <RejectModal
+          application={rejecting}
+          rejectionReason={rejectionReason}
+          onReasonChange={setRejectionReason}
+          onClose={() => {
+            if (actionLoadingId === rejecting.id) {
+              return;
+            }
+            setRejecting(null);
+            setRejectionReason("");
+          }}
+          onSubmit={() => void handleReject()}
+          loading={actionLoadingId === rejecting.id}
+        />
+      ) : null}
     </div>
-  )
+  );
 }
 
-/* ================= BADGE ================= */
-
-function StatusBadge({
-  status,
+function ApplicationDetailModal({
+  application,
+  onClose,
+  onApprove,
+  onReject,
+  actionLoading,
 }: {
-  status: 'pending' | 'approved' | 'rejected'
+  application: Application;
+  onClose: () => void;
+  onApprove: () => void;
+  onReject: () => void;
+  actionLoading: boolean;
 }) {
-  const styles = {
-    pending: 'bg-yellow-500/20 text-yellow-500',
-    approved: 'bg-green-500/20 text-green-600',
-    rejected: 'bg-red-500/20 text-red-500',
-  }
+  return (
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4 py-8"
+    >
+      <div
+        onClick={(event) => event.stopPropagation()}
+        className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-[28px] bg-white p-6"
+      >
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.18em] text-black/40">
+              Detail Verifikasi
+            </p>
+            <h2 className="mt-2 text-2xl text-black">
+              {application.applicantName}
+            </h2>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <StatusBadge status={application.status} />
+              <span className="rounded-full bg-black/5 px-3 py-1 text-xs text-black/70">
+                {getPartnerTypeLabel(application.partnerType)}
+              </span>
+            </div>
+          </div>
 
-  const labels = {
-    pending: 'Pending',
-    approved: 'Approved',
-    rejected: 'Rejected',
-  }
+          <div className="flex flex-wrap gap-2">
+            {application.status === "pending" ? (
+              <>
+                <button
+                  type="button"
+                  disabled={actionLoading}
+                  onClick={onApprove}
+                  className="rounded-xl bg-black px-4 py-3 text-sm text-white disabled:opacity-60"
+                >
+                  {actionLoading ? "Memproses..." : "Approve"}
+                </button>
+                <button
+                  type="button"
+                  disabled={actionLoading}
+                  onClick={onReject}
+                  className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 disabled:opacity-60"
+                >
+                  Reject
+                </button>
+              </>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl border border-black/15 px-4 py-3 text-sm text-black"
+            >
+              Tutup
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-8 grid gap-6 lg:grid-cols-2">
+          <DetailCard title="Informasi Pendaftar">
+            <DetailRow label="Nama" value={application.applicantName} />
+            <DetailRow label="Email" value={application.applicantEmail} />
+            <DetailRow label="No. WhatsApp" value={application.applicantPhone} />
+            <DetailRow label="Domisili / Kota" value={application.domicileCity} />
+            <DetailRow label="Alamat" value={application.address} />
+          </DetailCard>
+
+          <DetailCard
+            title={
+              application.partnerType === "studio"
+                ? "Informasi Studio"
+                : "Informasi Fotografer"
+            }
+          >
+            <DetailRow
+              label={
+                application.partnerType === "studio"
+                  ? "Nama Studio"
+                  : "Nama Profesional / Brand"
+              }
+              value={application.brandName || "-"}
+            />
+            <DetailRow
+              label="Layanan / Spesialisasi"
+              value={
+                application.services.length > 0
+                  ? application.services.join(", ")
+                  : "-"
+              }
+            />
+            <DetailRow label="Lama Pengalaman" value={application.experience} />
+            <DetailRow label="Nama Bank" value={application.bankName || "-"} />
+            <DetailRow
+              label="Nomor Rekening"
+              value={application.bankAccountNumber || "-"}
+            />
+            {application.partnerType === "studio" ? (
+              <>
+                <DetailRow
+                  label="Tahun Berdiri"
+                  value={application.establishedYear?.toString() || "-"}
+                />
+                <DetailRow
+                  label="No. WhatsApp Studio"
+                  value={application.studioPhone || "-"}
+                />
+              </>
+            ) : null}
+            <DetailRow
+              label={
+                application.partnerType === "studio"
+                  ? "Tentang Studio"
+                  : "Tentang Saya"
+              }
+              value={application.about}
+            />
+          </DetailCard>
+
+          <DetailCard title="Data Verifikasi">
+            <LinkRow
+              label={
+                application.partnerType === "studio"
+                  ? "Instagram Studio"
+                  : "Instagram Profesional"
+              }
+              href={application.instagramUrl}
+            />
+            <LinkRow
+              label="Google Drive Portofolio"
+              href={application.portfolioUrl}
+            />
+            <LinkRow label="CV" href={application.cvFileUrl || null} />
+            {application.partnerType === "studio" ? (
+              <>
+                <LinkRow
+                  label="Google Maps / Lokasi Studio"
+                  href={application.mapsUrl}
+                />
+                <LinkRow label="Website Studio" href={application.websiteUrl} />
+              </>
+            ) : null}
+          </DetailCard>
+
+          <DetailCard title="Persetujuan Mitra dan Review">
+            <DetailRow
+              label="Tanggal Pengajuan"
+              value={formatDateTime(application.createdAt)}
+            />
+            <DetailRow
+              label="Persetujuan Mitra"
+              value={application.termsAccepted ? "Disetujui" : "Belum tersedia"}
+            />
+            <DetailRow
+              label="Versi Persetujuan"
+              value={application.termsVersion || "-"}
+            />
+            <DetailRow
+              label="Disetujui Pada"
+              value={formatDateTime(application.termsAcceptedAt)}
+            />
+            <DetailRow
+              label="Waktu Deklarasi"
+              value={formatDateTime(application.declarationAcceptedAt)}
+            />
+            <DetailRow
+              label="Ditinjau Oleh"
+              value={application.reviewedByName || "-"}
+            />
+            <DetailRow
+              label="Waktu Review"
+              value={formatDateTime(application.reviewedAt)}
+            />
+            <DetailRow
+              label="Alasan Penolakan"
+              value={application.rejectionReason || "-"}
+            />
+          </DetailCard>
+        </div>
+
+        <DetailCard title="Isi Deklarasi" className="mt-6">
+          {application.declarations.length > 0 ? (
+            <ul className="space-y-3 text-sm leading-relaxed text-black/75">
+              {application.declarations.map((item) => (
+                <li key={item} className="rounded-2xl border border-black/10 px-4 py-3">
+                  {item}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-black/45">Tidak ada deklarasi tersimpan.</p>
+          )}
+        </DetailCard>
+      </div>
+    </div>
+  );
+}
+
+function RejectModal({
+  application,
+  rejectionReason,
+  onReasonChange,
+  onClose,
+  onSubmit,
+  loading,
+}: {
+  application: Application;
+  rejectionReason: string;
+  onReasonChange: (value: string) => void;
+  onClose: () => void;
+  onSubmit: () => void;
+  loading: boolean;
+}) {
+  const isDisabled = loading || !rejectionReason.trim();
 
   return (
-    <span className={`px-3 py-1 rounded-full text-xs ${styles[status]}`}>
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/30 px-4"
+    >
+      <div
+        onClick={(event) => event.stopPropagation()}
+        className="w-full max-w-lg rounded-[28px] bg-white p-6"
+      >
+        <p className="text-xs uppercase tracking-[0.18em] text-black/40">
+          Alasan Penolakan
+        </p>
+        <h3 className="mt-2 text-2xl text-black">{application.applicantName}</h3>
+        <p className="mt-3 text-sm leading-relaxed text-black/60">
+          Jelaskan alasan penolakan secara jelas. Alasan ini akan dikirim ke
+          pendaftar melalui WhatsApp.
+        </p>
+
+        <textarea
+          value={rejectionReason}
+          onChange={(event) => onReasonChange(event.target.value)}
+          rows={6}
+          className="mt-5 w-full rounded-2xl border border-black/15 px-4 py-3 text-sm text-black outline-none focus:border-black"
+          placeholder="Contoh: Link portofolio belum dapat diakses, mohon perbarui akses Google Drive dan ajukan kembali."
+        />
+
+        <div className="mt-5 flex flex-wrap justify-end gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={loading}
+            className="rounded-xl border border-black/15 px-4 py-3 text-sm text-black disabled:opacity-60"
+          >
+            Batal
+          </button>
+          <button
+            type="button"
+            onClick={onSubmit}
+            disabled={isDisabled}
+            className="rounded-xl bg-black px-4 py-3 text-sm text-white disabled:opacity-60"
+          >
+            {loading ? "Memproses..." : "Kirim Penolakan"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DetailCard({
+  title,
+  children,
+  className = "",
+}: {
+  title: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <section className={`rounded-[24px] border border-black/10 bg-white p-5 ${className}`}>
+      <h3 className="text-lg text-black">{title}</h3>
+      <div className="mt-4 space-y-4">{children}</div>
+    </section>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-xs uppercase tracking-[0.14em] text-black/40">{label}</p>
+      <p className="mt-1 text-sm leading-relaxed text-black/80">{value}</p>
+    </div>
+  );
+}
+
+function LinkRow({
+  label,
+  href,
+}: {
+  label: string;
+  href: string | null;
+}) {
+  return (
+    <div>
+      <p className="text-xs uppercase tracking-[0.14em] text-black/40">{label}</p>
+      {href ? (
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-1 inline-flex text-sm text-blue-700 underline"
+        >
+          {href}
+        </a>
+      ) : (
+        <p className="mt-1 text-sm text-black/45">-</p>
+      )}
+    </div>
+  );
+}
+
+function StatusBadge({ status }: { status: PartnerApplicationStatus }) {
+  const styles: Record<PartnerApplicationStatus, string> = {
+    pending: "bg-yellow-500/15 text-yellow-700",
+    approved: "bg-green-500/15 text-green-700",
+    rejected: "bg-red-500/15 text-red-700",
+  };
+
+  const labels: Record<PartnerApplicationStatus, string> = {
+    pending: "Menunggu",
+    approved: "Disetujui",
+    rejected: "Ditolak",
+  };
+
+  return (
+    <span className={`rounded-full px-3 py-1 text-xs ${styles[status]}`}>
       {labels[status]}
     </span>
-  )
+  );
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("id-ID", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
+function formatDateTime(value: string | null) {
+  if (!value) {
+    return "-";
+  }
+
+  return new Intl.DateTimeFormat("id-ID", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
 }

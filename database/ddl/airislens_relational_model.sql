@@ -83,6 +83,11 @@ CREATE TABLE `partner_gallery_items` (
   `title` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
   `category` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
   `image_url` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `ownership_declared` tinyint(1) NOT NULL DEFAULT '0',
+  `subject_consent_declared` tinyint(1) NOT NULL DEFAULT '0',
+  `publication_consent_declared` tinyint(1) NOT NULL DEFAULT '0',
+  `responsibility_accepted` tinyint(1) NOT NULL DEFAULT '0',
+  `declaration_accepted_at` datetime DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -107,17 +112,44 @@ CREATE TABLE `partner_schedules` (
 
 CREATE TABLE `partner_applications` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `applicant_name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `applicant_email` varchar(191) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `applicant_phone` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `partner_type` enum('individual','studio') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'individual',
   `location` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `domicile_city` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `address` text COLLATE utf8mb4_unicode_ci,
+  `brand_name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
   `category` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `specializations_json` text COLLATE utf8mb4_unicode_ci,
   `experience` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `instagram_url` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
   `portfolio_link` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   `about_you` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `maps_url` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `website_url` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `established_year` smallint unsigned DEFAULT NULL,
+  `studio_phone` varchar(30) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `declaration_items_json` text COLLATE utf8mb4_unicode_ci,
+  `declaration_accepted` tinyint(1) NOT NULL DEFAULT '0',
+  `declaration_accepted_at` datetime DEFAULT NULL,
+  `terms_accepted` tinyint(1) NOT NULL DEFAULT '0',
+  `terms_version` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `terms_accepted_at` datetime DEFAULT NULL,
+  `bank_name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `bank_account_number` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `cv_file_url` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
   `status` enum('pending','approved','rejected') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending',
+  `rejection_reason` text COLLATE utf8mb4_unicode_ci,
+  `reviewed_at` datetime DEFAULT NULL,
+  `reviewed_by_user_id` bigint unsigned DEFAULT NULL,
   `submitted_by_user_id` bigint unsigned NOT NULL,
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
+  KEY `partner_applications_partner_type_idx` (`partner_type`),
   KEY `partner_applications_status_idx` (`status`),
+  KEY `partner_applications_reviewed_by_user_id_idx` (`reviewed_by_user_id`),
   KEY `partner_applications_user_id_idx` (`submitted_by_user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -351,6 +383,10 @@ ALTER TABLE `partner_applications`
   ADD CONSTRAINT `fk_partner_applications_submitted_user`
   FOREIGN KEY (`submitted_by_user_id`) REFERENCES `users` (`id`)
   ON DELETE CASCADE
+  ON UPDATE CASCADE,
+  ADD CONSTRAINT `fk_partner_applications_reviewed_by_user`
+  FOREIGN KEY (`reviewed_by_user_id`) REFERENCES `users` (`id`)
+  ON DELETE SET NULL
   ON UPDATE CASCADE;
 
 ALTER TABLE `bookings`

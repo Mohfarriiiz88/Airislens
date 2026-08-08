@@ -1,16 +1,31 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ChangeEvent } from "react";
 
+import {
+  EMPTY_GALLERY_DECLARATIONS,
+  GALLERY_DECLARATION_ERROR_MESSAGE,
+  GALLERY_UPLOAD_DECLARATIONS,
+  galleryDeclarationsAccepted,
+  type GalleryDeclarationPayload,
+} from "@/lib/gallery-declarations";
 import { shouldBypassImageOptimization } from "@/lib/uploaded-assets";
+
+type GalleryDeclarationAudit = {
+  declarationAcceptedAt: string | null;
+  ownershipDeclared: boolean;
+  publicationConsentDeclared: boolean;
+  responsibilityAccepted: boolean;
+  subjectConsentDeclared: boolean;
+};
 
 type GalleryItem = {
   id: number;
   title: string;
   category: string;
   imageUrl: string;
-};
+} & GalleryDeclarationAudit;
 
 type GalleryForm = {
   title: string;
@@ -26,6 +41,27 @@ const EMPTY_FORM: GalleryForm = {
   imageUrl: "",
 };
 
+function createEmptyDeclarations(): GalleryDeclarationPayload {
+  return { ...EMPTY_GALLERY_DECLARATIONS };
+}
+
+function formatDeclarationAcceptedAt(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return new Intl.DateTimeFormat("id-ID", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(parsed);
+}
+
 export default function AdminGaleriPage() {
   const [items, setItems] = useState<GalleryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -37,13 +73,31 @@ export default function AdminGaleriPage() {
   const [form, setForm] = useState<GalleryForm>(EMPTY_FORM);
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
+  const [declarations, setDeclarations] = useState<GalleryDeclarationPayload>(
+    createEmptyDeclarations()
+  );
   const isSubmitting = submitState !== "idle";
+  const hasSelectedNewFile = Boolean(file);
+  const requiresDeclarations = !active || hasSelectedNewFile;
+  const declarationsComplete = galleryDeclarationsAccepted(declarations);
+  const hasRequiredFields =
+    form.title.trim().length > 0 &&
+    form.category.trim().length > 0 &&
+    (form.imageUrl.trim().length > 0 || hasSelectedNewFile);
+  const isSubmitDisabled =
+    isSubmitting ||
+    !hasRequiredFields ||
+    (requiresDeclarations && !declarationsComplete);
   const submitLabel =
     submitState === "uploading"
       ? "Mengunggah Foto..."
       : submitState === "saving"
-        ? "Menyimpan..."
-        : "Simpan";
+        ? active
+          ? "Menyimpan Perubahan..."
+          : "Menyimpan..."
+        : active
+          ? "Simpan Perubahan"
+          : "Upload Foto";
   const submitStatusText =
     submitState === "uploading"
       ? "Mengunggah, mengubah ke WebP, dan mengompres foto..."
@@ -94,11 +148,17 @@ export default function AdminGaleriPage() {
     };
   }, [previewUrl]);
 
-  function openCreate() {
+  function closeModal() {
+    setOpen(false);
     setActive(null);
     setForm(EMPTY_FORM);
     setFile(null);
     setPreviewUrl("");
+    setDeclarations(createEmptyDeclarations());
+  }
+
+  function openCreate() {
+    closeModal();
     setOpen(true);
   }
 
@@ -111,10 +171,11 @@ export default function AdminGaleriPage() {
     });
     setFile(null);
     setPreviewUrl("");
+    setDeclarations(createEmptyDeclarations());
     setOpen(true);
   }
 
-  function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const selected = event.target.files?.[0];
 
     if (!selected) {
@@ -127,16 +188,28 @@ export default function AdminGaleriPage() {
 
     setFile(selected);
     setPreviewUrl(URL.createObjectURL(selected));
+    setDeclarations(createEmptyDeclarations());
+  }
+
+  function handleDeclarationChange(key: keyof GalleryDeclarationPayload) {
+    setDeclarations((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
   }
 
   async function uploadImageIfNeeded() {
     if (!file) {
-      return form.imageUrl;
+      return form.imageUrl.trim();
     }
 
     const uploadBody = new FormData();
     uploadBody.append("kind", "gallery");
     uploadBody.append("file", file);
+
+    for (const declaration of GALLERY_UPLOAD_DECLARATIONS) {
+      uploadBody.append(declaration.key, String(declarations[declaration.key]));
+    }
 
     const response = await fetch("/api/admin/uploads", {
       method: "POST",
@@ -155,13 +228,15 @@ export default function AdminGaleriPage() {
   }
 
   async function submit() {
-    if (isSubmitting) {
-      return;
-    }
+    if (isSubmitDisabled) {
+      if (requiresDeclarations && !declarationsComplete) {
+        setIsError(true);
+        setMessage(GALLERY_DECLARATION_ERROR_MESSAGE);
+      } else {
+        setIsError(true);
+        setMessage("Judul, kategori, dan gambar wajib diisi.");
+      }
 
-    if (!form.title || !form.category || (!form.imageUrl && !file)) {
-      setIsError(true);
-      setMessage("Judul, kategori, dan gambar wajib diisi.");
       return;
     }
 
@@ -170,8 +245,11 @@ export default function AdminGaleriPage() {
     setMessage("");
 
     try {
+      const title = form.title.trim();
+      const category = form.category.trim();
       const imageUrl = await uploadImageIfNeeded();
       setSubmitState("saving");
+
       const endpoint = active
         ? `/api/admin/gallery/${active.id}`
         : "/api/admin/gallery";
@@ -182,9 +260,10 @@ export default function AdminGaleriPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          title: form.title,
-          category: form.category,
+          title,
+          category,
           imageUrl,
+          ...declarations,
         }),
       });
       const data = (await response.json()) as {
@@ -199,29 +278,30 @@ export default function AdminGaleriPage() {
       }
 
       if (active) {
-        const activeId = active.id;
-        const updatedItem: GalleryItem = {
-          id: activeId,
-          title: form.title,
-          category: form.category,
-          imageUrl,
-        };
+        const updatedItem =
+          data.item ??
+          ({
+            ...active,
+            title,
+            category,
+            imageUrl,
+          } satisfies GalleryItem);
 
         setItems((prev) =>
-          prev.map((item) => (item.id === activeId ? updatedItem : item))
+          prev.map((item) => (item.id === updatedItem.id ? updatedItem : item))
         );
       } else if (data.item) {
-        const createdItem = data.item;
-        setItems((prev) => [createdItem, ...prev]);
+        setItems((prev) => [data.item as GalleryItem, ...prev]);
       }
 
-      setOpen(false);
-      setActive(null);
-      setForm(EMPTY_FORM);
-      setFile(null);
-      setPreviewUrl("");
+      closeModal();
       setIsError(false);
-      setMessage(data.message ?? "Galeri berhasil disimpan.");
+      setMessage(
+        data.message ??
+          (active
+            ? "Foto galeri berhasil diperbarui."
+            : "Foto berhasil ditambahkan ke galeri.")
+      );
     } catch (error) {
       setIsError(true);
       setMessage(
@@ -252,7 +332,7 @@ export default function AdminGaleriPage() {
       }
 
       setItems((prev) => prev.filter((item) => item.id !== id));
-      setOpen(false);
+      closeModal();
       setIsError(false);
       setMessage(data.message ?? "Foto galeri berhasil dihapus.");
     } catch {
@@ -262,6 +342,10 @@ export default function AdminGaleriPage() {
   }
 
   const resolvedPreview = previewUrl || form.imageUrl;
+  const storedDeclarationTimestamp =
+    active && !hasSelectedNewFile
+      ? formatDeclarationAcceptedAt(active.declarationAcceptedAt)
+      : null;
 
   return (
     <div className="space-y-8">
@@ -294,7 +378,9 @@ export default function AdminGaleriPage() {
       )}
 
       {isLoading ? (
-        <div className="py-20 text-center text-black/40">Memuat galeri partner...</div>
+        <div className="py-20 text-center text-black/40">
+          Memuat galeri partner...
+        </div>
       ) : (
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3">
           {items.map((item) => (
@@ -318,7 +404,7 @@ export default function AdminGaleriPage() {
 
                 <button
                   onClick={() => openDetail(item)}
-                  className="mt-3 rounded-lg border text-white border-white/20 px-6 py-1 text-xs transition hover:bg-white/10"
+                  className="mt-3 rounded-lg border border-white/20 px-6 py-1 text-xs text-white transition hover:bg-white/10"
                 >
                   Detail
                 </button>
@@ -335,8 +421,8 @@ export default function AdminGaleriPage() {
       )}
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
-          <div className="w-full max-w-md rounded-2xl border border-black/20 bg-white p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-8">
+          <div className="max-h-full w-full max-w-2xl overflow-y-auto rounded-2xl border border-black/20 bg-white p-6">
             <h2 className="mb-4 text-2xl text-black">
               {active ? "Detail Foto" : "Tambah Foto"}
             </h2>
@@ -377,7 +463,7 @@ export default function AdminGaleriPage() {
               )}
 
               {resolvedPreview && (
-                <div className="relative h-40 w-full overflow-hidden rounded-xl border border-black/20">
+                <div className="relative h-48 w-full overflow-hidden rounded-xl border border-black/20">
                   <Image
                     src={resolvedPreview}
                     alt="Preview"
@@ -395,10 +481,85 @@ export default function AdminGaleriPage() {
                   )}
                 </div>
               )}
+
+              <div className="rounded-2xl border border-black/10 bg-[#faf7f2] p-4">
+                <div className="space-y-2">
+                  <h3 className="text-base font-medium text-black">
+                    Pernyataan dan Persetujuan Publikasi
+                  </h3>
+                  <p className="text-xs leading-6 text-black/65">
+                    Dengan menyetujui pernyataan di bawah ini, deklarasi berlaku
+                    untuk seluruh foto yang Anda pilih dalam proses unggah ini.
+                  </p>
+                  <p className="text-xs leading-6 text-black/55">
+                    {requiresDeclarations
+                      ? "Seluruh checkbox wajib dicentang sebelum foto dapat diunggah atau file pengganti disimpan."
+                      : "File foto tidak berubah, sehingga deklarasi yang sudah tersimpan tetap digunakan."}
+                  </p>
+                </div>
+
+                <div className="mt-4 space-y-3">
+                  {GALLERY_UPLOAD_DECLARATIONS.map((item) => {
+                    const checked = requiresDeclarations
+                      ? declarations[item.key]
+                      : Boolean(active?.[item.key]);
+
+                    return (
+                      <label
+                        key={item.key}
+                        className={`flex gap-3 rounded-xl border px-4 py-3 ${
+                          checked
+                            ? "border-black/15 bg-white"
+                            : "border-black/10 bg-white/80"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => handleDeclarationChange(item.key)}
+                          disabled={!requiresDeclarations || isSubmitting}
+                          className="mt-1 h-4 w-4 rounded border-black/30 accent-black disabled:cursor-not-allowed"
+                        />
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium text-black">
+                            {item.label}
+                          </p>
+                          <p className="text-xs leading-6 text-black/65">
+                            {item.statement}
+                          </p>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+
+                {requiresDeclarations ? (
+                  <p
+                    className={`mt-4 text-xs ${
+                      declarationsComplete ? "text-green-700" : "text-amber-700"
+                    }`}
+                  >
+                    {declarationsComplete
+                      ? "Seluruh pernyataan telah disetujui. Upload foto dapat dilanjutkan."
+                      : "Centang seluruh pernyataan untuk mengaktifkan tombol upload foto."}
+                  </p>
+                ) : (
+                  <div className="mt-4 rounded-xl border border-black/10 bg-white px-4 py-3 text-xs text-black/65">
+                    <p className="font-medium text-black">Status deklarasi tersimpan</p>
+                    <p className="mt-1 leading-6">
+                      {active?.declarationAcceptedAt
+                        ? storedDeclarationTimestamp
+                          ? `Fotografer telah memberikan pernyataan dan persetujuan untuk file ini pada ${storedDeclarationTimestamp}.`
+                          : "Fotografer telah memberikan pernyataan dan persetujuan untuk file ini."
+                        : "Belum ada deklarasi tersimpan untuk foto ini. Jika file diganti, seluruh pernyataan wajib disetujui kembali."}
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
 
-            <div className="mt-6 flex justify-between">
-              {active && (
+            <div className="mt-6 flex justify-between gap-3">
+              {active ? (
                 <button
                   onClick={() => remove(active.id)}
                   disabled={isSubmitting}
@@ -406,11 +567,13 @@ export default function AdminGaleriPage() {
                 >
                   Hapus
                 </button>
+              ) : (
+                <div />
               )}
 
               <div className="flex gap-3">
                 <button
-                  onClick={() => setOpen(false)}
+                  onClick={closeModal}
                   disabled={isSubmitting}
                   className="rounded-lg border border-black/20 px-4 py-2 text-sm text-black/70 hover:bg-black/10 disabled:cursor-not-allowed disabled:opacity-60"
                 >
@@ -419,8 +582,8 @@ export default function AdminGaleriPage() {
 
                 <button
                   onClick={submit}
-                  disabled={isSubmitting}
-                  className="rounded-lg bg-black px-6 py-2 text-sm text-white hover:opacity-90 disabled:opacity-70"
+                  disabled={isSubmitDisabled}
+                  className="rounded-lg bg-black px-6 py-2 text-sm text-white hover:opacity-90 disabled:cursor-not-allowed disabled:bg-black/40 disabled:text-white/80 disabled:hover:opacity-100"
                 >
                   {submitLabel}
                 </button>

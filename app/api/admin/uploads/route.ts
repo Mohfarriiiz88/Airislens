@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 
 import { requireSessionWithRole } from "@/lib/auth/access";
+import {
+  GALLERY_DECLARATION_ERROR_MESSAGE,
+  galleryDeclarationsAccepted,
+  normalizeGalleryDeclarationPayload,
+} from "@/lib/gallery-declarations";
 import { isUploadKind, saveUploadedFile, UploadError } from "@/lib/uploads";
 
 export const runtime = "nodejs";
@@ -20,7 +25,7 @@ export async function POST(request: Request) {
     const kind = String(formData.get("kind") ?? "");
     const file = formData.get("file");
 
-    if (!isUploadKind(kind)) {
+    if (!isUploadKind(kind) || kind === "partner-cv") {
       return NextResponse.json(
         { message: "Jenis upload tidak valid." },
         { status: 400 }
@@ -32,6 +37,22 @@ export async function POST(request: Request) {
         { message: "File upload wajib diisi." },
         { status: 400 }
       );
+    }
+
+    if (kind === "gallery") {
+      const declarations = normalizeGalleryDeclarationPayload({
+        ownershipDeclared: formData.get("ownershipDeclared"),
+        subjectConsentDeclared: formData.get("subjectConsentDeclared"),
+        publicationConsentDeclared: formData.get("publicationConsentDeclared"),
+        responsibilityAccepted: formData.get("responsibilityAccepted"),
+      });
+
+      if (!galleryDeclarationsAccepted(declarations)) {
+        return NextResponse.json(
+          { message: GALLERY_DECLARATION_ERROR_MESSAGE },
+          { status: 400 }
+        );
+      }
     }
 
     const url = await saveUploadedFile({

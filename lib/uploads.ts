@@ -12,7 +12,7 @@ import {
   UPLOAD_ROUTE_PREFIX,
 } from "@/lib/uploaded-assets";
 
-const ALLOWED_UPLOAD_KINDS = ["profile", "gallery"] as const;
+const ALLOWED_UPLOAD_KINDS = ["profile", "gallery", "partner-cv"] as const;
 const DEFAULT_UPLOAD_ROOT = path.join(
   /* turbopackIgnore: true */ process.cwd(),
   "public",
@@ -24,6 +24,7 @@ const LEGACY_PUBLIC_UPLOADS_DIR = path.join(
   "uploads"
 );
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+const MAX_DOCUMENT_UPLOAD_BYTES = 5 * 1024 * 1024;
 const MAX_IMAGE_DIMENSION = 2400;
 const MAX_OUTPUT_BYTES = 2 * 1024 * 1024;
 const WEBP_DIMENSION_STEPS = [MAX_IMAGE_DIMENSION, 2000, 1600, 1280];
@@ -38,14 +39,29 @@ const ALLOWED_SOURCE_MIME_TYPES = new Set([
 ]);
 
 const ALLOWED_SOURCE_FORMATS = new Set(["jpeg", "png", "webp"]);
+const ALLOWED_DOCUMENT_EXTENSIONS = new Set([".pdf", ".doc", ".docx"]);
+const DOCUMENT_EXTENSION_BY_MIME = new Map<string, string>([
+  ["application/pdf", ".pdf"],
+  ["application/msword", ".doc"],
+  [
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".docx",
+  ],
+]);
 
 const CONTENT_TYPE_BY_EXTENSION = new Map<string, string>([
   [".avif", "image/avif"],
   [".bmp", "image/bmp"],
+  [".doc", "application/msword"],
+  [
+    ".docx",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ],
   [".gif", "image/gif"],
   [".jfif", "image/jpeg"],
   [".jpeg", "image/jpeg"],
   [".jpg", "image/jpeg"],
+  [".pdf", "application/pdf"],
   [".png", "image/png"],
   [".svg", "image/svg+xml"],
   [".tif", "image/tiff"],
@@ -249,6 +265,48 @@ async function transformUploadedFile(file: File) {
   throw new UploadError("Gambar tidak dapat diproses.", 400);
 }
 
+async function prepareUploadedDocument(file: File) {
+  if (file.size <= 0) {
+    throw new UploadError("File upload wajib diisi.", 400);
+  }
+
+  if (file.size > MAX_DOCUMENT_UPLOAD_BYTES) {
+    throw new UploadError("Ukuran file CV maksimal 5 MB.", 400);
+  }
+
+  const mimeType = file.type.trim().toLowerCase();
+  const extensionFromMime = DOCUMENT_EXTENSION_BY_MIME.get(mimeType) ?? null;
+  const originalExtension = path.extname(file.name ?? "").toLowerCase();
+  const resolvedExtension =
+    extensionFromMime ||
+    (ALLOWED_DOCUMENT_EXTENSIONS.has(originalExtension)
+      ? originalExtension
+      : null);
+
+  if (!resolvedExtension) {
+    throw new UploadError(
+      "Format CV tidak didukung. Gunakan PDF, DOC, atau DOCX.",
+      400
+    );
+  }
+
+  if (
+    extensionFromMime &&
+    originalExtension &&
+    originalExtension !== extensionFromMime
+  ) {
+    throw new UploadError(
+      "Format CV tidak didukung. Gunakan PDF, DOC, atau DOCX.",
+      400
+    );
+  }
+
+  return {
+    buffer: Buffer.from(await file.arrayBuffer()),
+    extension: resolvedExtension,
+  };
+}
+
 function parseOwnedUploadUrl(uploadUrl: string, kind: UploadKind) {
   const pathSegments = getUploadPathSegmentsFromUrl(uploadUrl);
 
@@ -281,17 +339,20 @@ export async function assertOwnedUploadUrl(
 ) {
   const { fileName, pathSegments } = parseOwnedUploadUrl(uploadUrl, input.kind);
 
-  if (
-    !fileName.startsWith(`${input.userId}-`) ||
-    !fileName.toLowerCase().endsWith(".webp")
-  ) {
-    throw new UploadError("Anda tidak memiliki akses ke gambar ini.", 403);
+  const isOwnedFileName =
+    fileName.startsWith(`${input.userId}-`) &&
+    (input.kind === "partner-cv"
+      ? /\.(pdf|doc|docx)$/i.test(fileName)
+      : fileName.toLowerCase().endsWith(".webp"));
+
+  if (!isOwnedFileName) {
+    throw new UploadError("Anda tidak memiliki akses ke file upload ini.", 403);
   }
 
   const existingFilePath = await resolveExistingUploadFilePath(pathSegments);
 
   if (!existingFilePath) {
-    throw new UploadError("Gambar upload tidak ditemukan.", 400);
+    throw new UploadError("File upload tidak ditemukan.", 400);
   }
 }
 
@@ -300,14 +361,26 @@ export async function saveUploadedFile(input: {
   kind: UploadKind;
   userId: number;
 }) {
-  const transformedBuffer = await transformUploadedFile(input.file);
   const uploadRoot = getUploadRootDirectory();
-  const fileName = `${input.userId}-${randomUUID()}.webp`;
-  const relativePath = buildRelativeUploadPath(input.kind, fileName);
   const absoluteDirectory = path.join(uploadRoot, "partners", input.kind);
 
+  let fileName: string;
+  let fileBuffer: Buffer;
+
+  if (input.kind === "partner-cv") {
+    const preparedDocument = await prepareUploadedDocument(input.file);
+
+    fileName = `${input.userId}-${randomUUID()}${preparedDocument.extension}`;
+    fileBuffer = preparedDocument.buffer;
+  } else {
+    fileName = `${input.userId}-${randomUUID()}.webp`;
+    fileBuffer = await transformUploadedFile(input.file);
+  }
+
+  const relativePath = buildRelativeUploadPath(input.kind, fileName);
+
   await mkdir(absoluteDirectory, { recursive: true });
-  await writeFile(path.join(absoluteDirectory, fileName), transformedBuffer);
+  await writeFile(path.join(absoluteDirectory, fileName), fileBuffer);
 
   return buildUploadUrl(relativePath);
 }
